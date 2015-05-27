@@ -3,7 +3,7 @@ jsitbad(1) -- classify .js files as malicious or legitimate
 
 
 ## SYNOPSIS
-`jsitbad` `add` [(-m|-l|-u) [message]] <database> <js-file>
+`jsitbad` `add` [-f] [(-m|-l|-u) [message]] <database> <js-file>
 
 `jsitbad` `fit` [-o <output-file>] <database>
 
@@ -13,7 +13,14 @@ jsitbad(1) -- classify .js files as malicious or legitimate
 
 `jsitbad` tries to assess the malignity of JavaScript snippets (or whole files). Details about the algorithm should appear in a paper that I have yet to write.
 
-The `add` command adds a snippet in the <database> (See section [DATABASE][]). If no message is specified, a default one is constructed from the hostname and the date. The `message` argument should include information about the file (e.g. its origin), its malignity (e.g. who did the assessment, what is the modus operandi, how certain are we about the assessment) etc.
+The `add` command adds a snippet in the <database> (See section [DATABASE][]). If no message is specified, a default one is constructed from the username, hostname and the date. The `message` argument should include information about the file (e.g. its origin), its malignity (e.g. who did the assessment, what is the modus operandi, how certain are we about the assessment) etc.
+
+`add`-ing a snippet that already exists in the database is not always an error:
+
+* If the snippet's status is the same as the given `-m`, `-l` or `-u` flag, the metadata of the snippet is updated to reflect the fact that the snippet was seen again.
+* If the existing snippet's status is different from the given flag and no <message> is provided, the command will always fail.
+* If the existing snippet's status is unknown, and the `-m` or `-l` flag is provided, the snippet is moved to the appropriate subdirectory and its metadata is updated accordingly.
+* If the existing snippet's status is malicious or legitimate, its status will change only if the `-f` flag is provided.
 
 The `fit` command trains the classifer on the specified <database>. Information about the training, such as various assessments of the performance will be printed on `stdout` or in <output-file> if specified. Some files will be written in a subdirectory of the <database> directory, to be used by `predict`. The name of the subdirectory is of the form `YYYYMMDDHHSS_training`. It is untested if files in this directory can be used across machines. See the [BUGS][] section about that.
 
@@ -33,6 +40,7 @@ This object is appended by `predict` to the .json file that contains the metadat
 
 `add` command:
 
+* `-f` force change : allow the user to change a snippet status from malicious or legitimate
 * `-m` mark the file as malicious
 * `-l` mark the file as legitimate
 * `-u` (default) mark the file's status as unknown

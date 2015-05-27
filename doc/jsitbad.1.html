@@ -85,7 +85,7 @@
 
 <h2 id="SYNOPSIS">SYNOPSIS</h2>
 
-<p><code>jsitbad</code> <code>add</code> [(-m|-l|-u) [message]] <var>database</var> <var>js-file</var></p>
+<p><code>jsitbad</code> <code>add</code> [-f] [(-m|-l|-u) [message]] <var>database</var> <var>js-file</var></p>
 
 <p><code>jsitbad</code> <code>fit</code> [-o <var>output-file</var>] <var>database</var></p>
 
@@ -95,7 +95,17 @@
 
 <p><code>jsitbad</code> tries to assess the malignity of JavaScript snippets (or whole files). Details about the algorithm should appear in a paper that I have yet to write.</p>
 
-<p>The <code>add</code> command adds a snippet in the <var>database</var> (See section <a href="#DATABASE" title="DATABASE" data-bare-link="true">DATABASE</a>). If no message is specified, a default one is constructed from the hostname and the date. The <code>message</code> argument should include information about the file (e.g. its origin), its malignity (e.g. who did the assessment, what is the modus operandi, how certain are we about the assessment) etc.</p>
+<p>The <code>add</code> command adds a snippet in the <var>database</var> (See section <a href="#DATABASE" title="DATABASE" data-bare-link="true">DATABASE</a>). If no message is specified, a default one is constructed from the username, hostname and the date. The <code>message</code> argument should include information about the file (e.g. its origin), its malignity (e.g. who did the assessment, what is the modus operandi, how certain are we about the assessment) etc.</p>
+
+<p><code>add</code>-ing a snippet that already exists in the database is not always an error:</p>
+
+<ul>
+<li>If the snippet's status is the same as the given <code>-m</code>, <code>-l</code> or <code>-u</code> flag, the metadata of the snippet is updated to reflect the fact that the snippet was seen again.</li>
+<li>If the existing snippet's status is different from the given flag and no <var>message</var> is provided, the command will always fail.</li>
+<li>If the existing snippet's status is unknown, and the <code>-m</code> or <code>-l</code> flag is provided, the snippet is moved to the appropriate subdirectory and its metadata is updated accordingly.</li>
+<li>If the existing snippet's status is malicious or legitimate, its status will change only if the <code>-f</code> flag is provided.</li>
+</ul>
+
 
 <p>The <code>fit</code> command trains the classifer on the specified <var>database</var>. Information about the training, such as various assessments of the performance will be printed on <code>stdout</code> or in <var>output-file</var> if specified. Some files will be written in a subdirectory of the <var>database</var> directory, to be used by <code>predict</code>. The name of the subdirectory is of the form <code>YYYYMMDDHHSS_training</code>. It is untested if files in this directory can be used across machines. See the <a href="#BUGS" title="BUGS" data-bare-link="true">BUGS</a> section about that.</p>
 
@@ -116,6 +126,7 @@
 <p><code>add</code> command:</p>
 
 <ul>
+<li><code>-f</code> force change : allow the user to change a snippet status from malicious or legitimate</li>
 <li><code>-m</code> mark the file as malicious</li>
 <li><code>-l</code> mark the file as legitimate</li>
 <li><code>-u</code> (default) mark the file's status as unknown</li>

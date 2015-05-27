@@ -17,9 +17,13 @@ The `add` command adds a snippet in the `database` (See section [DATABASE][]). I
 
 The `fit` command trains the classifer on the specified `database`. Information about the training, such as various assessments of the performance will be printed on `stdout` or in `output-file` if specified. Some files will be written in a subdirectory of the `database` directory, to be used by `predict`. The name of the subdirectory is of the form `YYYYMMDDHHSS_training`. It is untested if files in this directory can be used across machines. See the [BUGS][] section about that.
 
+For vizualization purposes, the `fit` command creates a .svg file in the training directory, which contains all the samples as dots and the classifier output as color zones.
+
 The `predict` command tells the user whether some snippets are malicious or legitimate. The snippets are referenced either by their sha1 hash (either one per line in a file if the `-f` option is used, or in a space separated list on the command line) or by their filename (one snippet per file).
 
 `predict` first checks if the file exists in the database. If it does and its metadata is up to date, it will output that without computing anything. If the file does not exist or if its metadata is obsolete, `predict` will run the latest classifier in `database` (or alternatively the classifier in the user-specified `training` directory) on the snippet and output (either on `stdout` or on the file specified with the `-o` option) one JSON object per snippet.
+
+If a snippet given to `predict` is not already in the `database`, `predict` will be add it, the same way calling `add -u` would.
 
 This object contains information about the classification, mainly an assessment of the file ('malicious' or 'legitimate'), a classification score (a float between 0 and 1, closest to 1 if the file looks malicious), information about vizualization (e.g. coordinates in a 2D plot).
 
@@ -41,6 +45,7 @@ This object is appended by `predict` to the .json file that contains the metadat
 
 * `-f` specify a file to read hashes from, one hash per line
 * `-o` specify an output file, defaults to `stdout` if unspecified
+* `-i` specify which database or training directory to use
 
 ## DATABASE
 

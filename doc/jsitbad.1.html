@@ -1,0 +1,197 @@
+<!DOCTYPE html>
+<html>
+<head>
+  <meta http-equiv='content-type' value='text/html;charset=utf8'>
+  <meta name='generator' value='Ronn/v0.7.3 (http://github.com/rtomayko/ronn/tree/0.7.3)'>
+  <title>jsitbad(1) - classify .js files as malicious or legitimate</title>
+  <style type='text/css' media='all'>
+  /* style: man */
+  body#manpage {margin:0}
+  .mp {max-width:100ex;padding:0 9ex 1ex 4ex}
+  .mp p,.mp pre,.mp ul,.mp ol,.mp dl {margin:0 0 20px 0}
+  .mp h2 {margin:10px 0 0 0}
+  .mp > p,.mp > pre,.mp > ul,.mp > ol,.mp > dl {margin-left:8ex}
+  .mp h3 {margin:0 0 0 4ex}
+  .mp dt {margin:0;clear:left}
+  .mp dt.flush {float:left;width:8ex}
+  .mp dd {margin:0 0 0 9ex}
+  .mp h1,.mp h2,.mp h3,.mp h4 {clear:left}
+  .mp pre {margin-bottom:20px}
+  .mp pre+h2,.mp pre+h3 {margin-top:22px}
+  .mp h2+pre,.mp h3+pre {margin-top:5px}
+  .mp img {display:block;margin:auto}
+  .mp h1.man-title {display:none}
+  .mp,.mp code,.mp pre,.mp tt,.mp kbd,.mp samp,.mp h3,.mp h4 {font-family:monospace;font-size:14px;line-height:1.42857142857143}
+  .mp h2 {font-size:16px;line-height:1.25}
+  .mp h1 {font-size:20px;line-height:2}
+  .mp {text-align:justify;background:#fff}
+  .mp,.mp code,.mp pre,.mp pre code,.mp tt,.mp kbd,.mp samp {color:#131211}
+  .mp h1,.mp h2,.mp h3,.mp h4 {color:#030201}
+  .mp u {text-decoration:underline}
+  .mp code,.mp strong,.mp b {font-weight:bold;color:#131211}
+  .mp em,.mp var {font-style:italic;color:#232221;text-decoration:none}
+  .mp a,.mp a:link,.mp a:hover,.mp a code,.mp a pre,.mp a tt,.mp a kbd,.mp a samp {color:#0000ff}
+  .mp b.man-ref {font-weight:normal;color:#434241}
+  .mp pre {padding:0 4ex}
+  .mp pre code {font-weight:normal;color:#434241}
+  .mp h2+pre,h3+pre {padding-left:0}
+  ol.man-decor,ol.man-decor li {margin:3px 0 10px 0;padding:0;float:left;width:33%;list-style-type:none;text-transform:uppercase;color:#999;letter-spacing:1px}
+  ol.man-decor {width:100%}
+  ol.man-decor li.tl {text-align:left}
+  ol.man-decor li.tc {text-align:center;letter-spacing:4px}
+  ol.man-decor li.tr {text-align:right;float:right}
+  </style>
+</head>
+<!--
+  The following styles are deprecated and will be removed at some point:
+  div#man, div#man ol.man, div#man ol.head, div#man ol.man.
+
+  The .man-page, .man-decor, .man-head, .man-foot, .man-title, and
+  .man-navigation should be used instead.
+-->
+<body id='manpage'>
+  <div class='mp' id='man'>
+
+  <div class='man-navigation' style='display:none'>
+    <a href="#NAME">NAME</a>
+    <a href="#SYNOPSIS">SYNOPSIS</a>
+    <a href="#DESCRIPTION">DESCRIPTION</a>
+    <a href="#OPTIONS">OPTIONS</a>
+    <a href="#DATABASE">DATABASE</a>
+    <a href="#SYNTAX">SYNTAX</a>
+    <a href="#ENVIRONMENT">ENVIRONMENT</a>
+    <a href="#RETURN-VALUES">RETURN VALUES</a>
+    <a href="#STANDARDS">STANDARDS</a>
+    <a href="#SECURITY-CONSIDERATIONS">SECURITY CONSIDERATIONS</a>
+    <a href="#BUGS">BUGS</a>
+    <a href="#HISTORY">HISTORY</a>
+    <a href="#AUTHOR">AUTHOR</a>
+    <a href="#COPYRIGHT">COPYRIGHT</a>
+    <a href="#SEE-ALSO">SEE ALSO</a>
+    <a href="#DESCRIPTION">DESCRIPTION</a>
+    <a href="#TODO">TODO</a>
+  </div>
+
+  <ol class='man-decor man-head man head'>
+    <li class='tl'>jsitbad(1)</li>
+    <li class='tc'></li>
+    <li class='tr'>jsitbad(1)</li>
+  </ol>
+
+  <h2 id="NAME">NAME</h2>
+<p class="man-name">
+  <code>jsitbad</code> - <span class="man-whatis">classify .js files as malicious or legitimate</span>
+</p>
+
+<h2 id="SYNOPSIS">SYNOPSIS</h2>
+
+<p><code>jsitbad</code> <code>add</code> [(-m|-l|-u) [message]] <var>database</var> <var>js-file</var></p>
+
+<p><code>jsitbad</code> <code>fit</code> [-o <var>output-file</var>] <var>database</var></p>
+
+<p><code>jsitbad</code> <code>predict</code> (-f <var>hash-file</var>|<var>hash</var> ...| <var>js-file</var> ...) [-o <var>json-file</var>] -i (<var>database</var>|<var>training</var>)</p>
+
+<h2 id="DESCRIPTION">DESCRIPTION</h2>
+
+<p><code>jsitbad</code> tries to assess the malignity of JavaScript snippets (or whole files). Details about the algorithm should appear in a paper that I have yet to write.</p>
+
+<p>The <code>add</code> command adds a snippet in the <var>database</var> (See section <a href="#DATABASE" title="DATABASE" data-bare-link="true">DATABASE</a>). If no message is specified, a default one is constructed from the hostname and the date. The <code>message</code> argument should include information about the file (e.g. its origin), its malignity (e.g. who did the assessment, what is the modus operandi, how certain are we about the assessment) etc.</p>
+
+<p>The <code>fit</code> command trains the classifer on the specified <var>database</var>. Information about the training, such as various assessments of the performance will be printed on <code>stdout</code> or in <var>output-file</var> if specified. Some files will be written in a subdirectory of the <var>database</var> directory, to be used by <code>predict</code>. The name of the subdirectory is of the form <code>YYYYMMDDHHSS_training</code>. It is untested if files in this directory can be used across machines. See the <a href="#BUGS" title="BUGS" data-bare-link="true">BUGS</a> section about that.</p>
+
+<p>For vizualization purposes, the <code>fit</code> command creates a .svg file in the training directory, which contains all the samples as dots and the classifier output as color zones.</p>
+
+<p>The <code>predict</code> command tells the user whether some snippets are malicious or legitimate. The snippets are referenced either by their sha1 hash (either one per line in a file if the <code>-f</code> option is used, or in a space separated list on the command line) or by their filename (one snippet per file).</p>
+
+<p><code>predict</code> first checks if the file exists in the database. If it does and its metadata is up to date, it will output that without computing anything. If the file does not exist or if its metadata is obsolete, <code>predict</code> will run the latest classifier in <var>database</var> (or alternatively the classifier in the user-specified <var>training</var> directory) on the snippet and output (either on <code>stdout</code> or on the file specified with the <code>-o</code> option) one JSON object per snippet.</p>
+
+<p>If a snippet given to <code>predict</code> is not already in the <var>database</var>, <code>predict</code> will be add it, the same way calling <code>add -u</code> would.</p>
+
+<p>This object contains information about the classification, mainly an assessment of the file ('malicious' or 'legitimate'), a classification score (a float between 0 and 1, closest to 1 if the file looks malicious), information about vizualization (e.g. coordinates in a 2D plot).</p>
+
+<p>This object is appended by <code>predict</code> to the .json file that contains the metadata of the snippet.</p>
+
+<h2 id="OPTIONS">OPTIONS</h2>
+
+<p><code>add</code> command:</p>
+
+<ul>
+<li><code>-m</code> mark the file as malicious</li>
+<li><code>-l</code> mark the file as legitimate</li>
+<li><code>-u</code> (default) mark the file's status as unknown</li>
+</ul>
+
+
+<p><code>fit</code> command:</p>
+
+<ul>
+<li><code>-o</code> specify an output file, defaults to <code>stdout</code> if unspecified</li>
+</ul>
+
+
+<p><code>predict</code> command:</p>
+
+<ul>
+<li><code>-f</code> specify a file to read hashes from, one hash per line</li>
+<li><code>-o</code> specify an output file, defaults to <code>stdout</code> if unspecified</li>
+<li><code>-i</code> specify which database or training directory to use</li>
+</ul>
+
+
+<h2 id="DATABASE">DATABASE</h2>
+
+<p><code>jsitbad</code>'s database consists of three directories :</p>
+
+<ul>
+<li><code>malicious</code>: malicious files</li>
+<li><code>legitimate</code>: legitimate files</li>
+<li><code>unknown</code>: files of unknown status</li>
+</ul>
+
+
+<p>Each of those directories contains the JavaScript files, whose name is the sha1 checksum of the code inside with the <code>.js</code> extension (e.g. <code>ffabce78341dc27fc7993efadd46fa54fbcb55dc.js</code>).</p>
+
+<p>Every JavaScript file should be accompanied by a <code>.json</code> file that bears the same name except for the extension and holds metadata about the JavaScript snippet. Such metadata can include the user-specified or machine-generated  message at the time of addition, information about previous runs of <code>predict</code> and <code>fit</code> and information about occurences of this snippet in the wild.</p>
+
+<h2 id="SYNTAX">SYNTAX</h2>
+
+<h2 id="ENVIRONMENT">ENVIRONMENT</h2>
+
+<h2 id="RETURN-VALUES">RETURN VALUES</h2>
+
+<h2 id="STANDARDS">STANDARDS</h2>
+
+<h2 id="SECURITY-CONSIDERATIONS">SECURITY CONSIDERATIONS</h2>
+
+<h2 id="BUGS">BUGS</h2>
+
+<ul>
+<li>The JSON schema for the metadata and the output of <code>predict</code> is not written, although this may be a feature and not a bug after all.</li>
+<li>It is unknown whether the files written by <code>fit</code> are portable across machines. Training directories should therefore not be sent, transferred nor saved to version control. Instead, the database should be transferred and the <code>fit</code> command run again.</li>
+</ul>
+
+
+<h2 id="HISTORY">HISTORY</h2>
+
+<h2 id="AUTHOR">AUTHOR</h2>
+
+<p>Joint work @sekoia.fr</p>
+
+<h2 id="COPYRIGHT">COPYRIGHT</h2>
+
+<h2 id="SEE-ALSO">SEE ALSO</h2>
+
+<h2 id="DESCRIPTION">DESCRIPTION</h2>
+
+<h2 id="TODO">TODO</h2>
+
+
+  <ol class='man-decor man-foot man foot'>
+    <li class='tl'></li>
+    <li class='tc'>May 2015</li>
+    <li class='tr'>jsitbad(1)</li>
+  </ol>
+
+  </div>
+</body>
+</html>

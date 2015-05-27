@@ -3,7 +3,10 @@ import string
 import re
 import numpy as np
 from sklearn import manifold
+from sklearn.feature_extraction.text import TfidfTransformer
+from sklearn.feature_extraction.text import CountVectorizer
 import matplotlib.pylab as plt
+from slimit.lexer import Lexer
 
 
 def load_js_files(pattern):
@@ -42,6 +45,7 @@ def load_js_files(pattern):
         data.append(new)
     return data
 
+#Simple features
 def length(code):
     return len(code)
 
@@ -75,7 +79,36 @@ def max_nesting_level(code):
             l-=1
     return max_l
 
-features = [length, nb_lines, avg_char_per_line, nb_strings, nb_non_printable, hex_or_octal, max_nesting_level]
+def simple_features(text_list):
+    '''Transform the list of text into a feature matrix'''
+    features = [length, nb_lines, avg_char_per_line, nb_strings, nb_non_printable, hex_or_octal, max_nesting_level]
+    answer = []
+    for t in text_list:
+        answer.append([f(t) for f in features])
+    return np.array(answer)
+
+#Features based on lexing
+def train_tfidf(corpus):
+    '''Return the tf_idf transformer trained on the supplied corpus
+
+    Args:
+        corpus (list): List of text elements'''
+    count_vect = CountVectorizer()
+    train_counts = count_vect.fit_transform(corpus)
+    tfidf_transformer = TfidfTransformer().fit(train_counts)
+    def text2tfidf(text_list):
+        '''Transform a list of text into a tfidf matrix'''
+        return tfidf_transformer.transform(count_vect.transform(text_list))
+    return text2tfidf
+
+def train_from_js_tokens(corpus):
+    lexer = Lexer()
+    tokens_corpus = []
+    for t in corpus:
+        lexer.input(t)
+        tokens_corpus.append(' '.join([token.type for token in lexer]))
+    return train_tfidf(tokens_corpus)
+
 
 def place_labels(labels, Y):
     for label, x, y in zip(labels, Y[:, 0], Y[:, 1]):
@@ -84,7 +117,7 @@ def place_labels(labels, Y):
 def single_projection(X, s, l, color, labels=None):
     Y = l.fit_transform(X)
     plt.title(s)
-    plt.scatter(Y[:, 0], Y[:, 1], c=color, alpha=0.2)
+    plt.scatter(Y[:, 0], Y[:, 1], c=color, alpha=0.7)
     plt.axis('tight')
     if labels:
         place_labels(labels, Y)

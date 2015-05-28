@@ -1,0 +1,146 @@
+#!/usr/bin/env python
+"""
+jsitbad: try to classify .js files as malicious or legitimate
+
+Usage:
+jsitbad add [-f] [-m|-l|-u] <database> <js-file> [<message>]
+
+Options:
+  -m  Malicious
+  -l  Legitimate
+  -u  Unknown (default)
+"""
+from docopt import docopt
+import logging
+import os
+import hashlib
+import glob
+import getpass
+import socket
+import datetime
+
+class Database():
+    """A directory structure containing JavaScript samples and associated metadata"""
+    def __init__(self, path):
+        """Load or create the Database at path"""
+        self.path = path
+        self.subdirs = [self.path+'/'+sdir for sdir in ['malicious', 'legitimate', 'unknown']]
+        if not self.check():
+            self.create()
+
+    def check(self):
+        """Check if the database exists and contains the needed subdirs"""
+        if not os.path.isdir(self.path):
+            return False
+        if not all(map(os.path.isdir, self.subdirs)):
+            return False
+        return True
+
+    def create(self):
+        """Create the directory structure needed to host a database"""
+        for sdir in self.subdirs:
+            os.makedirs(sdir)
+
+    def lookup(self, sha1):
+        """Return the snippet with the provided sha1, if it exists in the database"""
+        logging.debug('Looking for snippet '+sha1)
+        files=sum([glob.glob(sdir+'/*.js') for sdir in self.subdirs], [])
+        matching_files = [f for f in files if os.path.basename(f)[:-3] == sha1]
+        assert len(matching_files) <= 1, "Multiple snippets of the same hash in the DB"
+        if matching_files:
+            fname = matching_files[0]
+            logging.debug('Found')
+            return Snippet(filename=matching_files[0])
+        logging.debug('Not found')
+        return None
+
+    def add_new(self, snippet, message):
+        """Add to the database a snippet that wasn't there before, return the newly created snippet"""
+        fname = self.path+'/'+snippet.status+'/'+snippet.sha1+'.js'
+        with open(fname, 'wb') as f:
+            f.write(snippet.data)
+        snippet.filename = fname
+        snippet.log(event='created', message=message)
+        return snippet
+
+    def move(self, snippet, status, message):
+        """Moves an existing snippet from its status to another"""
+        path = snippet.filename.split('/')
+        new_name = '/'.join(path[:-2]+[status, path[-1]])
+        os.rename(snippet.filename, new_name)
+        #Now moving the logs
+        os.rename(snippet.filename[:-2]+'log', new_name[:-2]+'log')
+        snippet.filename = new_name
+        old_status = snippet.status
+        snippet.status = status
+        snippet.log(event='moved from '+old_status, message=message)
+
+class Snippet():
+    """A JavaScript snippet"""
+
+    log_template = "{date} {severity} hostname={hostname} user={user} sha1={sha1} status={status} event={event} {message}\n"
+
+    def __init__(self, filename=None, status='unknown', sha1=None, data=None):
+        """Create a new snippet instance, either from data and status, or from a file in a DB"""
+        self.data = data
+        if filename:
+            self.loadFromFile(filename)
+            return
+        if not sha1:
+            self.sha1 = hashlib.sha1(self.data).hexdigest()
+        else:
+            self.sha1 = sha1
+        self.status = status
+
+    def loadFromFile(self, fname):
+        """Load a snippet from a file in a DB"""
+        self.filename = fname
+        self.__init__(data=open(fname, 'r').read(), status=fname.split('/')[-2], sha1=fname.split('/')[-1][:-3])
+
+    def log(self, event, message):
+        """Append a line to the snippet's log file"""
+        if not self.filename:
+            raise ValueError("We don't know which DB we belong to.")
+        severity='ERROR:' if 'bad move' in event else 'WARNING:' if 'moved' in event else 'INFO:'
+        log_message = self.log_template.format(date=datetime.datetime.now().isoformat(),
+                                               severity=severity,
+                                               hostname=socket.gethostname(),
+                                               user=getpass.getuser(),
+                                               sha1=self.sha1,
+                                               status=self.status,
+                                               event=event,
+                                               message=message if message else '')
+        log_fname = self.filename[:-3]+'.log'
+        with open(log_fname, 'a') as f:
+            f.write(log_message)
+
+
+def do_add():
+    """Add or move a snippet in the database"""
+    database = Database(arguments['<database>'])
+    status = 'malicious' if arguments['-m'] else 'legitimate' if arguments['-l'] else 'unknown'
+    fname = arguments['<js-file>'] if arguments['<js-file>'] != '-' else '/dev/stdin'
+    with open(fname, 'rb') as f:
+        data = f.read()
+    snippet = Snippet(data=data, status=status)
+    existing = database.lookup(snippet.sha1)
+    if not existing:
+        snippet = database.add_new(snippet, arguments['<message>'])
+    elif existing.status == snippet.status:
+        existing.log(event='seen', message=arguments['<message>'])
+    elif existing.status == 'unknown' or arguments['-f']:
+        if not arguments['<message>']:
+            existing.log(event='bad move to '+snippet.status, message='reason="no message""' )
+            raise RuntimeError("Please provide a message when changing a snippet's status")
+        snippet = database.move(existing, snippet.status, arguments['<message>'])
+    else:
+        existing.log(event='bad move to '+snippet.status,
+                     message='reason="no -f option" '+str(arguments['<message>']))
+        raise RuntimeError("Please use the -f option if you want to change the status of a malicious"
+        "or legitimate sample")
+
+if __name__ == '__main__':
+    arguments = docopt(__doc__, version='JsItBad 0.0')
+    logging.basicConfig(level=logging.DEBUG)
+    if arguments['add']:
+        do_add()

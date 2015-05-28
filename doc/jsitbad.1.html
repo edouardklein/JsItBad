@@ -85,7 +85,7 @@
 
 <h2 id="SYNOPSIS">SYNOPSIS</h2>
 
-<p><code>jsitbad</code> <code>add</code> [-f] [(-m|-l|-u) [message]] <var>database</var> <var>js-file</var></p>
+<p><code>jsitbad</code> <code>add</code> [-f] [-m|-l|-u] <var>database</var> <var>js-file</var> [<var>message</var>]</p>
 
 <p><code>jsitbad</code> <code>fit</code> [-o <var>output-file</var>] <var>database</var></p>
 
@@ -95,15 +95,15 @@
 
 <p><code>jsitbad</code> tries to assess the malignity of JavaScript snippets (or whole files). Details about the algorithm should appear in a paper that I have yet to write.</p>
 
-<p>The <code>add</code> command adds a snippet in the <var>database</var> (See section <a href="#DATABASE" title="DATABASE" data-bare-link="true">DATABASE</a>). If no message is specified, a default one is constructed from the username, hostname and the date. The <code>message</code> argument should include information about the file (e.g. its origin), its malignity (e.g. who did the assessment, what is the modus operandi, how certain are we about the assessment) etc.</p>
+<p>The <code>add</code> command adds a snippet in the <var>database</var> (See section <a href="#DATABASE" title="DATABASE" data-bare-link="true">DATABASE</a>). If a message is specified it is appended to a default one constructed from the username, hostname, the date, etc. The <code>message</code> argument should include information about the file (e.g. its origin), its malignity (e.g. who did the assessment, what is the modus operandi, how certain are we about the assessment)... This log message is appended to the snippet's log file.</p>
 
-<p><code>add</code>-ing a snippet that already exists in the database is not always an error:</p>
+<p><code>add</code>-ing a snippet that already exists in the database can fail:</p>
 
 <ul>
-<li>If the snippet's status is the same as the given <code>-m</code>, <code>-l</code> or <code>-u</code> flag, the metadata of the snippet is updated to reflect the fact that the snippet was seen again.</li>
+<li>If the snippet's status is the same as the given <code>-m</code>, <code>-l</code> or <code>-u</code> flag, the metadata of the snippet is updated to reflect the fact that the snippet was seen again and the command succeeds.</li>
 <li>If the existing snippet's status is different from the given flag and no <var>message</var> is provided, the command will always fail.</li>
 <li>If the existing snippet's status is unknown, and the <code>-m</code> or <code>-l</code> flag is provided, the snippet is moved to the appropriate subdirectory and its metadata is updated accordingly.</li>
-<li>If the existing snippet's status is malicious or legitimate, its status will change only if the <code>-f</code> flag is provided.</li>
+<li>If the existing snippet's status is malicious or legitimate, its status will change only if the <code>-f</code> flag is provided, otherwise the command will fail.</li>
 </ul>
 
 
@@ -115,11 +115,11 @@
 
 <p><code>predict</code> first checks if the file exists in the database. If it does and its metadata is up to date, it will output that without computing anything. If the file does not exist or if its metadata is obsolete, <code>predict</code> will run the latest classifier in <var>database</var> (or alternatively the classifier in the user-specified <var>training</var> directory) on the snippet and output (either on <code>stdout</code> or on the file specified with the <code>-o</code> option) one JSON object per snippet.</p>
 
-<p>If a snippet given to <code>predict</code> is not already in the <var>database</var>, <code>predict</code> will be add it, the same way calling <code>add -u</code> would.</p>
-
 <p>This object contains information about the classification, mainly an assessment of the file ('malicious' or 'legitimate'), a classification score (a float between 0 and 1, closest to 1 if the file looks malicious), information about vizualization (e.g. coordinates in a 2D plot).</p>
 
-<p>This object is appended by <code>predict</code> to the .json file that contains the metadata of the snippet.</p>
+<p>This object is appended by <code>predict</code> to the log file that contains the metadata of the snippet.</p>
+
+<p>If a snippet given to <code>predict</code> is not already in the <var>database</var>, <code>predict</code> will add it, the same way calling <code>add -u</code> would.</p>
 
 <h2 id="OPTIONS">OPTIONS</h2>
 
@@ -162,7 +162,7 @@
 
 <p>Each of those directories contains the JavaScript files, whose name is the sha1 checksum of the code inside with the <code>.js</code> extension (e.g. <code>ffabce78341dc27fc7993efadd46fa54fbcb55dc.js</code>).</p>
 
-<p>Every JavaScript file should be accompanied by a <code>.json</code> file that bears the same name except for the extension and holds metadata about the JavaScript snippet. Such metadata can include the user-specified or machine-generated  message at the time of addition, information about previous runs of <code>predict</code> and <code>fit</code> and information about occurences of this snippet in the wild.</p>
+<p>Every JavaScript file should be accompanied by a <code>.log</code> file that bears the same name except for the extension and holds metadata about the JavaScript snippet. Such metadata can include the user-specified message at the time of addition, information about previous runs of <code>predict</code> and <code>fit</code> and information about occurences of this snippet in the wild.</p>
 
 <h2 id="SYNTAX">SYNTAX</h2>
 

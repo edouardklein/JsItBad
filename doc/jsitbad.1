@@ -7,7 +7,7 @@
 \fBjsitbad\fR \- classify \.js files as malicious or legitimate
 .
 .SH "SYNOPSIS"
-\fBjsitbad\fR \fBadd\fR [\-f] [(\-m|\-l|\-u) [message]] \fIdatabase\fR \fIjs\-file\fR
+\fBjsitbad\fR \fBadd\fR [\-f] [\-m|\-l|\-u] \fIdatabase\fR \fIjs\-file\fR [\fImessage\fR]
 .
 .P
 \fBjsitbad\fR \fBfit\fR [\-o \fIoutput\-file\fR] \fIdatabase\fR
@@ -19,13 +19,13 @@
 \fBjsitbad\fR tries to assess the malignity of JavaScript snippets (or whole files)\. Details about the algorithm should appear in a paper that I have yet to write\.
 .
 .P
-The \fBadd\fR command adds a snippet in the \fIdatabase\fR (See section \fIDATABASE\fR)\. If no message is specified, a default one is constructed from the username, hostname and the date\. The \fBmessage\fR argument should include information about the file (e\.g\. its origin), its malignity (e\.g\. who did the assessment, what is the modus operandi, how certain are we about the assessment) etc\.
+The \fBadd\fR command adds a snippet in the \fIdatabase\fR (See section \fIDATABASE\fR)\. If a message is specified it is appended to a default one constructed from the username, hostname, the date, etc\. The \fBmessage\fR argument should include information about the file (e\.g\. its origin), its malignity (e\.g\. who did the assessment, what is the modus operandi, how certain are we about the assessment)\.\.\. This log message is appended to the snippet\'s log file\.
 .
 .P
-\fBadd\fR\-ing a snippet that already exists in the database is not always an error:
+\fBadd\fR\-ing a snippet that already exists in the database can fail:
 .
 .IP "\(bu" 4
-If the snippet\'s status is the same as the given \fB\-m\fR, \fB\-l\fR or \fB\-u\fR flag, the metadata of the snippet is updated to reflect the fact that the snippet was seen again\.
+If the snippet\'s status is the same as the given \fB\-m\fR, \fB\-l\fR or \fB\-u\fR flag, the metadata of the snippet is updated to reflect the fact that the snippet was seen again and the command succeeds\.
 .
 .IP "\(bu" 4
 If the existing snippet\'s status is different from the given flag and no \fImessage\fR is provided, the command will always fail\.
@@ -34,7 +34,7 @@ If the existing snippet\'s status is different from the given flag and no \fImes
 If the existing snippet\'s status is unknown, and the \fB\-m\fR or \fB\-l\fR flag is provided, the snippet is moved to the appropriate subdirectory and its metadata is updated accordingly\.
 .
 .IP "\(bu" 4
-If the existing snippet\'s status is malicious or legitimate, its status will change only if the \fB\-f\fR flag is provided\.
+If the existing snippet\'s status is malicious or legitimate, its status will change only if the \fB\-f\fR flag is provided, otherwise the command will fail\.
 .
 .IP "" 0
 .
@@ -51,13 +51,13 @@ The \fBpredict\fR command tells the user whether some snippets are malicious or 
 \fBpredict\fR first checks if the file exists in the database\. If it does and its metadata is up to date, it will output that without computing anything\. If the file does not exist or if its metadata is obsolete, \fBpredict\fR will run the latest classifier in \fIdatabase\fR (or alternatively the classifier in the user\-specified \fItraining\fR directory) on the snippet and output (either on \fBstdout\fR or on the file specified with the \fB\-o\fR option) one JSON object per snippet\.
 .
 .P
-If a snippet given to \fBpredict\fR is not already in the \fIdatabase\fR, \fBpredict\fR will be add it, the same way calling \fBadd \-u\fR would\.
-.
-.P
 This object contains information about the classification, mainly an assessment of the file (\'malicious\' or \'legitimate\'), a classification score (a float between 0 and 1, closest to 1 if the file looks malicious), information about vizualization (e\.g\. coordinates in a 2D plot)\.
 .
 .P
-This object is appended by \fBpredict\fR to the \.json file that contains the metadata of the snippet\.
+This object is appended by \fBpredict\fR to the log file that contains the metadata of the snippet\.
+.
+.P
+If a snippet given to \fBpredict\fR is not already in the \fIdatabase\fR, \fBpredict\fR will add it, the same way calling \fBadd \-u\fR would\.
 .
 .SH "OPTIONS"
 \fBadd\fR command:
@@ -116,7 +116,7 @@ This object is appended by \fBpredict\fR to the \.json file that contains the me
 Each of those directories contains the JavaScript files, whose name is the sha1 checksum of the code inside with the \fB\.js\fR extension (e\.g\. \fBffabce78341dc27fc7993efadd46fa54fbcb55dc\.js\fR)\.
 .
 .P
-Every JavaScript file should be accompanied by a \fB\.json\fR file that bears the same name except for the extension and holds metadata about the JavaScript snippet\. Such metadata can include the user\-specified or machine\-generated message at the time of addition, information about previous runs of \fBpredict\fR and \fBfit\fR and information about occurences of this snippet in the wild\.
+Every JavaScript file should be accompanied by a \fB\.log\fR file that bears the same name except for the extension and holds metadata about the JavaScript snippet\. Such metadata can include the user\-specified message at the time of addition, information about previous runs of \fBpredict\fR and \fBfit\fR and information about occurences of this snippet in the wild\.
 .
 .SH "SYNTAX"
 .

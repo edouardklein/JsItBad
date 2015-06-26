@@ -78,7 +78,7 @@ class Database():
 class Snippet():
     """A JavaScript snippet"""
 
-    log_template = "{date} {severity} hostname={hostname} user={user} sha1={sha1} status={status} event={event} {message}\n"
+    log_template = "{date} {severity} hostname={hostname} user={user} sha1={sha1} status={status} event={event} message={message}\n"
 
     def __init__(self, filename=None, status='unknown', sha1=None, data=None):
         """Create a new snippet instance, either from data and status, or from a file in a DB"""

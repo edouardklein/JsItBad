@@ -5,6 +5,7 @@ jsitbad: try to classify .js files as malicious or legitimate
 
 Usage:
 jsitbad add [-f] [-m|-l|-u] <database> <js-file> [<message>]
+jsitbad fit <database>
 
 Options:
   -m  Malicious
@@ -21,6 +22,109 @@ import socket
 import datetime
 import re
 import requests
+from slimit.lexer import Lexer
+from sklearn.feature_extraction.text import TfidfTransformer
+from sklearn.feature_extraction.text import CountVectorizer
+from sklearn import manifold
+from sklearn import cross_validation
+from sklearn import metrics
+from sklearn.svm import LinearSVC
+from sklearn.neighbors import KNeighborsClassifier
+from sklearn.svm import SVC
+from sklearn.ensemble import BaggingClassifier
+from sklearn.ensemble import RandomForestClassifier
+from sklearn.ensemble import ExtraTreesClassifier
+from sklearn.ensemble import AdaBoostClassifier
+from sklearn.ensemble import GradientBoostingClassifier
+import matplotlib.pyplot as plt
+import seaborn as sns
+import pickle
+import numpy as np
+
+# FIXME: Changer les print() en logging.* 
+
+class Trainer():
+    """Create and save the information about training a classifier on a Daabase"""
+    def __init__(self, db, load=None):
+        """Load or create the structure storing the training information"""
+        self.db = db
+        if not load:
+            self.path = db.path+'/'+datetime.datetime.now().strftime('%Y%m%d%H%M%S')+'_training'
+            if not os.path.isdir(self.path):
+                os.makedirs(self.path)
+        self.corpus = self.db.legitimate_snippets() + self.db.malicious_snippets()
+
+    def write_pickle(self, var, name):
+        """Serialize an object in our save dir"""
+        with open(self.path+'/'+name+'.pickle', 'wb') as f:
+            pickle.dump(var, f)
+
+    def lex_corpus(self):
+        '''Return our corpus as a list of text describing the JS tokens'''
+        tokens_corpus = []
+        for t in self.corpus:
+            logging.debug('Lexing '+t.filename)
+            try:
+                lexer = Lexer()
+                lexer.input(t.data)
+                tokens_corpus.append(' '.join([token.type for token in lexer]))
+            except TypeError as e:
+                logging.error('Error lexing '+t.filename+' : '+str(e))
+        return tokens_corpus
+
+    def train_tfidf(self):
+        '''Return the tf_idf transformer trained on our corpus'''
+        count_vect = CountVectorizer()
+        train_counts = count_vect.fit_transform(self.lex_corpus())
+        tfidf_transformer = TfidfTransformer().fit(train_counts)
+        self.write_pickle(tfidf_transformer, 'tfidf_transformer')
+        def text2tfidf(text_list):
+            '''Transform a list of text into a tfidf matrix'''
+            return tfidf_transformer.transform(count_vect.transform(text_list)).toarray()
+        return text2tfidf
+
+    def clf_eval(self, clf, X, Y):
+        """Train and evaluate a classifier"""
+        loo = cross_validation.LeaveOneOut(len(Y))
+        Y_true = []
+        Y_pred = []
+        for train_index, test_index in loo:
+            X_train, X_test = X[train_index], X[test_index]
+            Y_train, Y_test = Y[train_index], Y[test_index]
+            clf.fit(X_train, Y_train)
+            Y_pred.append(clf.predict(X_test))
+            Y_true.append(Y_test)
+        Y_true = np.array(Y_true)
+        Y_pred = np.array(Y_pred)
+        cm =  metrics.confusion_matrix(Y_true, Y_pred)
+        logging.info("Overall accuracy : "+str(sum(Y_true == Y_pred)/len(Y_true)))
+        return cm
+
+    def fit(self):
+        """Train multiple classifiers, print and save performance information"""
+        self.tfidf = self.train_tfidf()
+        X_0 = self.tfidf([s.data for s in self.db.legitimate_snippets()])
+        X_1 = self.tfidf([s.data for s in self.db.malicious_snippets()])
+        self.X = np.vstack([X_0, X_1])
+        self.Y =np.zeros(len(self.X))
+        self.Y[-len(X_1):] = 1
+        self.write_pickle(self.X, 'X')
+        self.write_pickle(self.Y, 'Y')
+        results = {'Yes':[len(X_0),0], 'No':[0, len(X_1)]}
+        plt.figure(figsize=(10,10))
+        for str_clf in ['LinearSVC', 'KNeighborsClassifier', 'SVC', 'BaggingClassifier', 'RandomForestClassifier',
+                        'ExtraTreesClassifier', 'AdaBoostClassifier', 'GradientBoostingClassifier']:
+            clf = eval(str_clf+'()')
+            logging.info("Evaluating "+str_clf+"...")
+            cm = self.clf_eval(clf, self.X, self.Y)
+            plt.scatter(cm[0,1], cm[1,0])
+            plt.text(cm[0,1], cm[1,0], str_clf)
+            clf.fit(self.X,self.Y)
+            self.write_pickle(clf, 'str_clf')
+        plt.title("Performance of different classification methods over the current database")
+        plt.xlabel("# of False Positives")
+        plt.ylabel("# of False Negatives")
+        plt.savefig(self.path+'/FPFN.png')
 
 class Database():
     """A directory structure containing JavaScript samples and associated metadata"""
@@ -77,6 +181,15 @@ class Database():
         old_status = snippet.status
         snippet.status = status
         snippet.log(event='moved from '+old_status, message=message)
+
+    def legitimate_snippets(self):
+        """The legitimate snippets in the DB"""
+        return [Snippet(filename=fname) for fname in sorted(glob.glob(self.path+'/legitimate/*.js'))]
+
+    def malicious_snippets(self):
+        """The malicious snippets in the DB"""
+        return [Snippet(filename=fname) for fname in sorted(glob.glob(self.path+'/malicious/*.js'))]
+
 
 class Snippet():
     """A JavaScript snippet"""
@@ -150,8 +263,17 @@ def do_add():
         raise RuntimeError("Please use the -f option if you want to change the status of a malicious"
         "or legitimate sample")
 
+
+def do_fit():
+    """Train a classifier on a database"""
+    database = Database(arguments['<database>'])
+    trainer = Trainer(database)
+    trainer.fit()
+    
 if __name__ == '__main__':
     arguments = docopt(__doc__, version='JsItBad 0.0')
     logging.basicConfig(level=logging.DEBUG)
     if arguments['add']:
         do_add()
+    elif arguments['fit']:
+        do_fit()

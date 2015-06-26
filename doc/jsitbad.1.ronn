@@ -15,6 +15,8 @@ jsitbad(1) -- classify .js files as malicious or legitimate
 
 The `add` command adds a snippet in the <database> (See section [DATABASE][]). If a message is specified it is appended to a default one constructed from the username, hostname, the date, etc. The `message` argument should include information about the file (e.g. its origin), its malignity (e.g. who did the assessment, what is the modus operandi, how certain are we about the assessment)... This log message is appended to the snippet's log file.
 
+The <js-file> argument can point to a local file or to a URL that `jsitbad` will then try to retrieve.
+
 `add`-ing a snippet that already exists in the database can fail:
 
 * If the snippet's status is the same as the given `-m`, `-l` or `-u` flag, the metadata of the snippet is updated to reflect the fact that the snippet was seen again and the command succeeds.

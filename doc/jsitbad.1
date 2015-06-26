@@ -1,7 +1,7 @@
 .\" generated with Ronn/v0.7.3
 .\" http://github.com/rtomayko/ronn/tree/0.7.3
 .
-.TH "JSITBAD" "1" "May 2015" "" ""
+.TH "JSITBAD" "1" "June 2015" "" ""
 .
 .SH "NAME"
 \fBjsitbad\fR \- classify \.js files as malicious or legitimate
@@ -20,6 +20,9 @@
 .
 .P
 The \fBadd\fR command adds a snippet in the \fIdatabase\fR (See section \fIDATABASE\fR)\. If a message is specified it is appended to a default one constructed from the username, hostname, the date, etc\. The \fBmessage\fR argument should include information about the file (e\.g\. its origin), its malignity (e\.g\. who did the assessment, what is the modus operandi, how certain are we about the assessment)\.\.\. This log message is appended to the snippet\'s log file\.
+.
+.P
+The \fIjs\-file\fR argument can point to a local file or to a URL that \fBjsitbad\fR will then try to retrieve\.
 .
 .P
 \fBadd\fR\-ing a snippet that already exists in the database can fail:

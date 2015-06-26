@@ -1,3 +1,4 @@
+all: README.md doc
 README.md: doc/jsitbad.1.ronn
 	sed 's/</`/g' < doc/jsitbad.1.ronn | sed 's/>/`/g'> README.md
 

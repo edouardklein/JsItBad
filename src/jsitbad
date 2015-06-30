@@ -100,6 +100,51 @@ class Trainer():
         logging.info("Overall accuracy : "+str(sum(Y_true == Y_pred)/len(Y_true)))
         return cm
 
+    def single_projection(self,X, s, l, color, labels=None):
+        Y = l.fit_transform(X)
+        plt.title(s)
+        plt.scatter(Y[:, 0], Y[:, 1], c=color, alpha=0.7)
+        plt.axis('tight')
+        if labels:
+            place_labels(labels, Y)
+
+    def project_on_plane(self, X, color, n_neighbors = 10, n_components = 2, title='2D projection', unique=None, labels=None):
+        '''Give multiple 2D representations of a high-dimenstional dataset
+
+    See http://scikit-learn.org/stable/auto_examples/manifold/plot_compare_methods.html'''
+        fig = plt.figure(figsize=(15,8))
+        learners = [['Isomap', manifold.Isomap(n_neighbors, n_components)],
+                    ['LLE', manifold.LocallyLinearEmbedding(n_neighbors, n_components, eigen_solver='auto')],
+                    ['LTSA', manifold.LocallyLinearEmbedding(n_neighbors, n_components, eigen_solver='auto', method='ltsa')],
+                    ['Hessian', manifold.LocallyLinearEmbedding(n_neighbors, n_components, eigen_solver='auto', method='hessian')],
+                    ["Modified", manifold.LocallyLinearEmbedding(n_neighbors, n_components, eigen_solver='auto', method='hessian')],
+                    ["MDS", manifold.MDS(n_components, max_iter=100, n_init=1)],
+                    ["Spectral Embedding", manifold.SpectralEmbedding(n_components=n_components,n_neighbors=n_neighbors)],
+                    ["t-SNE", manifold.TSNE(n_components=n_components, init='pca', random_state=0)]
+                ]
+        fig_num = 331
+        if unique:
+            s,l = [x for x in learners if x[0] == unique][0]
+            single_projection(X, s, l, color, labels)
+        else:
+            for s, l in learners:
+                ax = fig.add_subplot(fig_num)
+                fig_num += 1
+                self.single_projection(X, s, l, color, labels)
+        plt.savefig(self.path+'/'+title+'.pdf')
+
+    def plot_results(self):
+        """Plot the classifiers training information"""
+        plt.figure(figsize=(10,10))
+        for clf_str, (fp, fn) in self.results.items():
+            plt.scatter(fp, fn)
+            plt.text(fp, fn, clf_str)
+        plt.title("Performance of different classification methods over the current database")
+        plt.xlabel("# of False Positives")
+        plt.ylabel("# of False Negatives")
+        plt.savefig(self.path+'/FPFN.png')
+        self.project_on_plane(self.X, ['r' if c == 1 else 'g' for c in self.Y])
+
     def fit(self):
         """Train multiple classifiers, print and save performance information"""
         self.tfidf = self.train_tfidf()
@@ -110,21 +155,18 @@ class Trainer():
         self.Y[-len(X_1):] = 1
         self.write_pickle(self.X, 'X')
         self.write_pickle(self.Y, 'Y')
-        results = {'Yes':[len(X_0),0], 'No':[0, len(X_1)]}
-        plt.figure(figsize=(10,10))
+        self.results = {'Yes': [len(X_0), 0], 'No': [0, len(X_1)]}
         for str_clf in ['LinearSVC', 'KNeighborsClassifier', 'SVC', 'BaggingClassifier', 'RandomForestClassifier',
                         'ExtraTreesClassifier', 'AdaBoostClassifier', 'GradientBoostingClassifier']:
             clf = eval(str_clf+'()')
             logging.info("Evaluating "+str_clf+"...")
             cm = self.clf_eval(clf, self.X, self.Y)
-            plt.scatter(cm[0,1], cm[1,0])
-            plt.text(cm[0,1], cm[1,0], str_clf)
+            self.results[str_clf] = [cm[0,1], cm[1,0]]
             clf.fit(self.X,self.Y)
-            self.write_pickle(clf, 'str_clf')
-        plt.title("Performance of different classification methods over the current database")
-        plt.xlabel("# of False Positives")
-        plt.ylabel("# of False Negatives")
-        plt.savefig(self.path+'/FPFN.png')
+            self.write_pickle(clf, str_clf)
+        self.write_pickle(self.results, "results")
+        self.plot_results()
+
 
 class Database():
     """A directory structure containing JavaScript samples and associated metadata"""

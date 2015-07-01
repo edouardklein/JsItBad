@@ -1,7 +1,7 @@
 .\" generated with Ronn/v0.7.3
 .\" http://github.com/rtomayko/ronn/tree/0.7.3
 .
-.TH "JSITBAD" "1" "June 2015" "" ""
+.TH "JSITBAD" "1" "July 2015" "" ""
 .
 .SH "NAME"
 \fBjsitbad\fR \- classify \.js files as malicious or legitimate
@@ -10,10 +10,10 @@
 \fBjsitbad\fR \fBadd\fR [\-f] [\-m|\-l|\-u] \fIdatabase\fR \fIjs\-file\fR [\fImessage\fR]
 .
 .P
-\fBjsitbad\fR \fBfit\fR [\-o \fIoutput\-file\fR] \fIdatabase\fR
+\fBjsitbad\fR \fBfit\fR \fIdatabase\fR
 .
 .P
-\fBjsitbad\fR \fBpredict\fR (\-f \fIhash\-file\fR|\fIhash\fR \.\.\.| \fIjs\-file\fR \.\.\.) [\-o \fIjson\-file\fR] \-i (\fIdatabase\fR|\fItraining\fR)
+\fBjsitbad\fR \fBpredict\fR \fIdatabase\fR \fIjs\-file\fR
 .
 .SH "DESCRIPTION"
 \fBjsitbad\fR tries to assess the malignity of JavaScript snippets (or whole files)\. Details about the algorithm should appear in a paper that I have yet to write\.
@@ -42,22 +42,16 @@ If the existing snippet\'s status is malicious or legitimate, its status will ch
 .IP "" 0
 .
 .P
-The \fBfit\fR command trains the classifer on the specified \fIdatabase\fR\. Information about the training, such as various assessments of the performance will be printed on \fBstdout\fR or in \fIoutput\-file\fR if specified\. Some files will be written in a subdirectory of the \fIdatabase\fR directory, to be used by \fBpredict\fR\. The name of the subdirectory is of the form \fBYYYYMMDDHHSS_training\fR\. It is untested if files in this directory can be used across machines\. See the \fIBUGS\fR section about that\.
+The \fBfit\fR command trains the classifer on the specified \fIdatabase\fR\. Information about the training, such as various assessments of the performance will be printed on \fBstdout\fR\. Some files will be written in a subdirectory of the \fIdatabase\fR directory, to be used by \fBpredict\fR\. The name of the subdirectory is of the form \fBYYYYMMDDHHSS_training\fR\. It is untested if files in this directory can be used across machines\. See the \fIBUGS\fR section about that\.
 .
 .P
-For vizualization purposes, the \fBfit\fR command creates a \.svg file in the training directory, which contains all the samples as dots and the classifier output as color zones\.
+For vizualization purposes, the \fBfit\fR command creates a \fB\.png\fR file in the training directory, which contains all the samples as dots and the classifier output as color zones\.
 .
 .P
-The \fBpredict\fR command tells the user whether some snippets are malicious or legitimate\. The snippets are referenced either by their sha1 hash (either one per line in a file if the \fB\-f\fR option is used, or in a space separated list on the command line) or by their filename (one snippet per file)\.
+The \fBpredict\fR command tells the user whether some snippets are malicious or legitimate\.
 .
 .P
-\fBpredict\fR first checks if the file exists in the database\. If it does and its metadata is up to date, it will output that without computing anything\. If the file does not exist or if its metadata is obsolete, \fBpredict\fR will run the latest classifier in \fIdatabase\fR (or alternatively the classifier in the user\-specified \fItraining\fR directory) on the snippet and output (either on \fBstdout\fR or on the file specified with the \fB\-o\fR option) one JSON object per snippet\.
-.
-.P
-This object contains information about the classification, mainly an assessment of the file (\'malicious\' or \'legitimate\'), a classification score (a float between 0 and 1, closest to 1 if the file looks malicious), information about vizualization (e\.g\. coordinates in a 2D plot)\.
-.
-.P
-This object is appended by \fBpredict\fR to the log file that contains the metadata of the snippet\.
+\fBpredict\fR first checks if the file exists in the database\. If it does and its metadata is up to date, it will output that without computing anything\. If the file does not exist or if its metadata is obsolete, \fBpredict\fR will run the latest classifier in \fIdatabase\fR on the snippet and output the result\.
 .
 .P
 If a snippet given to \fBpredict\fR is not already in the \fIdatabase\fR, \fBpredict\fR will add it, the same way calling \fBadd \-u\fR would\.
@@ -76,28 +70,6 @@ If a snippet given to \fBpredict\fR is not already in the \fIdatabase\fR, \fBpre
 .
 .IP "\(bu" 4
 \fB\-u\fR (default) mark the file\'s status as unknown
-.
-.IP "" 0
-.
-.P
-\fBfit\fR command:
-.
-.IP "\(bu" 4
-\fB\-o\fR specify an output file, defaults to \fBstdout\fR if unspecified
-.
-.IP "" 0
-.
-.P
-\fBpredict\fR command:
-.
-.IP "\(bu" 4
-\fB\-f\fR specify a file to read hashes from, one hash per line
-.
-.IP "\(bu" 4
-\fB\-o\fR specify an output file, defaults to \fBstdout\fR if unspecified
-.
-.IP "\(bu" 4
-\fB\-i\fR specify which database or training directory to use
 .
 .IP "" 0
 .
@@ -134,16 +106,19 @@ Every JavaScript file should be accompanied by a \fB\.log\fR file that bears the
 .SH "BUGS"
 .
 .IP "\(bu" 4
-The JSON schema for the metadata and the output of \fBpredict\fR is not written, although this may be a feature and not a bug after all\.
-.
-.IP "\(bu" 4
 It is unknown whether the files written by \fBfit\fR are portable across machines\. Training directories should therefore not be sent, transferred nor saved to version control\. Instead, the database should be transferred and the \fBfit\fR command run again\.
 .
-.IP "" 0
+.IP "\(bu" 4
+The code was written hastily and is of sub\-par quality, I hope I will get around to rewriting it soon
 .
 .SH "HISTORY"
 .
 .SH "AUTHOR"
+
+.
+.IP "" 0
+.
+.P
 Joint work @sekoia\.fr
 .
 .SH "COPYRIGHT"

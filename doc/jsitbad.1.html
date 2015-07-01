@@ -87,9 +87,9 @@
 
 <p><code>jsitbad</code> <code>add</code> [-f] [-m|-l|-u] <var>database</var> <var>js-file</var> [<var>message</var>]</p>
 
-<p><code>jsitbad</code> <code>fit</code> [-o <var>output-file</var>] <var>database</var></p>
+<p><code>jsitbad</code> <code>fit</code> <var>database</var></p>
 
-<p><code>jsitbad</code> <code>predict</code> (-f <var>hash-file</var>|<var>hash</var> ...| <var>js-file</var> ...) [-o <var>json-file</var>] -i (<var>database</var>|<var>training</var>)</p>
+<p><code>jsitbad</code> <code>predict</code> <var>database</var> <var>js-file</var></p>
 
 <h2 id="DESCRIPTION">DESCRIPTION</h2>
 
@@ -109,17 +109,13 @@
 </ul>
 
 
-<p>The <code>fit</code> command trains the classifer on the specified <var>database</var>. Information about the training, such as various assessments of the performance will be printed on <code>stdout</code> or in <var>output-file</var> if specified. Some files will be written in a subdirectory of the <var>database</var> directory, to be used by <code>predict</code>. The name of the subdirectory is of the form <code>YYYYMMDDHHSS_training</code>. It is untested if files in this directory can be used across machines. See the <a href="#BUGS" title="BUGS" data-bare-link="true">BUGS</a> section about that.</p>
+<p>The <code>fit</code> command trains the classifer on the specified <var>database</var>. Information about the training, such as various assessments of the performance will be printed on <code>stdout</code>. Some files will be written in a subdirectory of the <var>database</var> directory, to be used by <code>predict</code>. The name of the subdirectory is of the form <code>YYYYMMDDHHSS_training</code>. It is untested if files in this directory can be used across machines. See the <a href="#BUGS" title="BUGS" data-bare-link="true">BUGS</a> section about that.</p>
 
-<p>For vizualization purposes, the <code>fit</code> command creates a .svg file in the training directory, which contains all the samples as dots and the classifier output as color zones.</p>
+<p>For vizualization purposes, the <code>fit</code> command creates a <code>.png</code> file in the training directory, which contains all the samples as dots and the classifier output as color zones.</p>
 
-<p>The <code>predict</code> command tells the user whether some snippets are malicious or legitimate. The snippets are referenced either by their sha1 hash (either one per line in a file if the <code>-f</code> option is used, or in a space separated list on the command line) or by their filename (one snippet per file).</p>
+<p>The <code>predict</code> command tells the user whether some snippets are malicious or legitimate.</p>
 
-<p><code>predict</code> first checks if the file exists in the database. If it does and its metadata is up to date, it will output that without computing anything. If the file does not exist or if its metadata is obsolete, <code>predict</code> will run the latest classifier in <var>database</var> (or alternatively the classifier in the user-specified <var>training</var> directory) on the snippet and output (either on <code>stdout</code> or on the file specified with the <code>-o</code> option) one JSON object per snippet.</p>
-
-<p>This object contains information about the classification, mainly an assessment of the file ('malicious' or 'legitimate'), a classification score (a float between 0 and 1, closest to 1 if the file looks malicious), information about vizualization (e.g. coordinates in a 2D plot).</p>
-
-<p>This object is appended by <code>predict</code> to the log file that contains the metadata of the snippet.</p>
+<p><code>predict</code> first checks if the file exists in the database. If it does and its metadata is up to date, it will output that without computing anything. If the file does not exist or if its metadata is obsolete, <code>predict</code> will run the latest classifier in <var>database</var> on the snippet and output the result.</p>
 
 <p>If a snippet given to <code>predict</code> is not already in the <var>database</var>, <code>predict</code> will add it, the same way calling <code>add -u</code> would.</p>
 
@@ -132,22 +128,6 @@
 <li><code>-m</code> mark the file as malicious</li>
 <li><code>-l</code> mark the file as legitimate</li>
 <li><code>-u</code> (default) mark the file's status as unknown</li>
-</ul>
-
-
-<p><code>fit</code> command:</p>
-
-<ul>
-<li><code>-o</code> specify an output file, defaults to <code>stdout</code> if unspecified</li>
-</ul>
-
-
-<p><code>predict</code> command:</p>
-
-<ul>
-<li><code>-f</code> specify a file to read hashes from, one hash per line</li>
-<li><code>-o</code> specify an output file, defaults to <code>stdout</code> if unspecified</li>
-<li><code>-i</code> specify which database or training directory to use</li>
 </ul>
 
 
@@ -179,14 +159,14 @@
 <h2 id="BUGS">BUGS</h2>
 
 <ul>
-<li>The JSON schema for the metadata and the output of <code>predict</code> is not written, although this may be a feature and not a bug after all.</li>
-<li>It is unknown whether the files written by <code>fit</code> are portable across machines. Training directories should therefore not be sent, transferred nor saved to version control. Instead, the database should be transferred and the <code>fit</code> command run again.</li>
-</ul>
-
+<li><p>It is unknown whether the files written by <code>fit</code> are portable across machines. Training directories should therefore not be sent, transferred nor saved to version control. Instead, the database should be transferred and the <code>fit</code> command run again.</p></li>
+<li><p>The code was written hastily and is of sub-par quality, I hope I will get around to rewriting it soon</p>
 
 <h2 id="HISTORY">HISTORY</h2>
 
-<h2 id="AUTHOR">AUTHOR</h2>
+<h2 id="AUTHOR">AUTHOR</h2></li>
+</ul>
+
 
 <p>Joint work @sekoia.fr</p>
 
@@ -201,7 +181,7 @@
 
   <ol class='man-decor man-foot man foot'>
     <li class='tl'></li>
-    <li class='tc'>June 2015</li>
+    <li class='tc'>July 2015</li>
     <li class='tr'>jsitbad(1)</li>
   </ol>
 

@@ -6,6 +6,7 @@ jsitbad: try to classify .js files as malicious or legitimate
 Usage:
 jsitbad add [-f] [-m|-l|-u] <database> <js-file> [<message>]
 jsitbad fit <database>
+jsitbad predict <database> <js-file>
 
 Options:
   -m  Malicious
@@ -40,67 +41,242 @@ import matplotlib.pyplot as plt
 import seaborn as sns
 import pickle
 import numpy as np
+from scipy.interpolate import griddata
 
-# FIXME: Changer les print() en logging.* 
 
-class Trainer():
-    """Create and save the information about training a classifier on a Daabase"""
-    def __init__(self, db, load=None):
-        """Load or create the structure storing the training information"""
-        self.db = db
-        if not load:
-            self.path = db.path+'/'+datetime.datetime.now().strftime('%Y%m%d%H%M%S')+'_training'
-            if not os.path.isdir(self.path):
-                os.makedirs(self.path)
-        self.corpus = self.db.legitimate_snippets() + self.db.malicious_snippets()
+class Picklable():
+    """Object able to store and read information"""
 
     def write_pickle(self, var, name):
         """Serialize an object in our save dir"""
         with open(self.path+'/'+name+'.pickle', 'wb') as f:
             pickle.dump(var, f)
 
-    def lex_corpus(self):
-        '''Return our corpus as a list of text describing the JS tokens'''
-        tokens_corpus = []
-        for t in self.corpus:
-            logging.debug('Lexing '+t.filename)
-            try:
-                lexer = Lexer()
-                lexer.input(t.data)
-                tokens_corpus.append(' '.join([token.type for token in lexer]))
-            except TypeError as e:
-                logging.error('Error lexing '+t.filename+' : '+str(e))
-        return tokens_corpus
+    def read_pickle(self, name):
+        """Read an object from a pickle file"""
+        with open(self.path+'/'+name+'.pickle', 'rb') as f:
+            return pickle.load(f)
 
-    def train_tfidf(self):
-        '''Return the tf_idf transformer trained on our corpus'''
-        count_vect = CountVectorizer()
-        train_counts = count_vect.fit_transform(self.lex_corpus())
-        tfidf_transformer = TfidfTransformer().fit(train_counts)
-        self.write_pickle(tfidf_transformer, 'tfidf_transformer')
-        def text2tfidf(text_list):
-            '''Transform a list of text into a tfidf matrix'''
-            return tfidf_transformer.transform(count_vect.transform(text_list)).toarray()
-        return text2tfidf
 
-    def clf_eval(self, clf, X, Y):
-        """Train and evaluate a classifier"""
-        loo = cross_validation.LeaveOneOut(len(Y))
+class ML(Picklable):
+    """Util class handling the Machine Learning components useful for Predictor, Trainer and Plotter"""
+    def __init__(self, db, path):
+        """Load an instance or create an empty one"""
+        self.db = db
+        self.path=path
+        if os.path.isdir(self.path):
+            self.count_vectorizer = self.read_pickle('count_vectorizer')
+            self.tfidf_transformer = self.read_pickle('tfidf_transformer')
+            self.results = self.read_pickle('results')
+            self.clf = self.read_pickle('clf')
+            manhattan = lambda clf_str: sum(self.results[clf_str])
+            logging.debug({k:manhattan(k) for k in self.results})
+            best_clf = sorted(self.results, key=manhattan)[0]
+            logging.debug("Chosen clf : "+best_clf)
+            self.best_clf = self.clf[best_clf]
+            self.X_tfidf = self.read_pickle('X_tfidf')
+            self.Y = self.read_pickle('Y')
+            
+        else:
+            self.X_js = self.db.legitimate_snippets() + self.db.malicious_snippets()
+            self.X_lexed = np.array(self.lex_corpus())
+            self.Y = np.zeros(len(self.X_lexed))
+            self.Y[-len(self.db.malicious_snippets()):] = 1
+            self.count_vectorizer, self.X_count = self.train_count(self.X_lexed)
+            self.tfidf_transformer, self.X_tfidf = self.train_tfidf(self.X_count)
+            self.results = {'Yes': [len(self.db.legitimate_snippets()), 0],
+                            'No': [0, len(self.db.malicious_snippets())]}
+            self.clf = {}
+
+    def write_all(self):
+        """Save the components to disk"""
+        self.write_pickle(self.count_vectorizer, 'count_vectorizer')
+        self.write_pickle(self.tfidf_transformer, 'tfidf_transformer')
+        self.write_pickle(self.results, 'results')
+        self.write_pickle(self.clf, 'clf')
+        self.write_pickle(self.X_tfidf, 'X_tfidf')
+        self.write_pickle(self.Y, 'Y')
+
+    def precompute_loo(self):
+        """Pre-compute the common transformers in preparation of a loo evaluation"""
+        self.loo_X_tfidfs = []
+        self.loo_X_tfidf_test = []
+        self.loo_Ys = []
+        for i in range(0, len(self.X_lexed)):
+            logging.debug("Precomputing loo {} of {}".format(i, len(self.X_lexed)))
+            logging.debug(''.join(map(str, [self.X_lexed.shape, self.X_lexed[:i, None].shape, self.X_lexed[i+1:, None].shape])))
+            if i != 0 and i != len(self.X_lexed)-1:
+                loo_X_lexed = np.vstack([self.X_lexed[:i, None], self.X_lexed[i+1:, None]]).reshape(-1)
+                self.loo_Ys.append(np.vstack([self.Y[:i, None], self.Y[i+1:, None]]).reshape(-1))
+            elif i==0:
+                loo_X_lexed = self.X_lexed[1:]
+                self.loo_Ys.append(self.Y[1:])
+            else:  # i==len....
+                loo_X_lexed = self.X_lexed[:-1]
+                self.loo_Ys.append(self.Y[:-1])
+            cv, loo_X_count = self.train_count(loo_X_lexed)
+            tf, loo_X_tfidf = self.train_tfidf(loo_X_count)
+            self.loo_X_tfidfs.append(loo_X_tfidf)
+            self.loo_X_tfidf_test.append(tf.transform(cv.transform([self.X_lexed[i]])).toarray())
+
+    def clf_eval(self, str_clf):
+        """Eval and train the specified classifier"""
         Y_true = []
         Y_pred = []
-        for train_index, test_index in loo:
-            X_train, X_test = X[train_index], X[test_index]
-            Y_train, Y_test = Y[train_index], Y[test_index]
+        clf = eval(str_clf+'()')
+        for i, (X_train, Y_train) in enumerate(zip(self.loo_X_tfidfs, self.loo_Ys)):
+            X_test = self.loo_X_tfidf_test[i]
+            Y_test = self.Y[i]
             clf.fit(X_train, Y_train)
             Y_pred.append(clf.predict(X_test))
             Y_true.append(Y_test)
         Y_true = np.array(Y_true)
         Y_pred = np.array(Y_pred)
         cm =  metrics.confusion_matrix(Y_true, Y_pred)
-        logging.info("Overall accuracy : "+str(sum(Y_true == Y_pred)/len(Y_true)))
-        return cm
+        self.results[str_clf] = [cm[0,1], cm[1,0]]
+        clf.fit(self.X_tfidf, self.Y)
+        self.clf[str_clf] = clf
 
-    def single_projection(self,X, s, l, color, labels=None):
+    def lex_corpus(self):
+        '''Return our corpus as a list of text describing the JS tokens'''
+        tokens_corpus = []
+        for t in self.X_js:
+            logging.debug('Lexing '+t.filename)
+            try:
+                tokens_corpus.append(self.lex(t.data))
+            except TypeError as e:
+                logging.error('Error lexing '+t.filename+' : '+str(e))
+        return tokens_corpus
+
+    def lex(self, data):
+        """Return the lex-ed string from the JS code"""
+        lexer = Lexer()
+        lexer.input(data)
+        return ' '.join([token.type for token in lexer])
+
+    def train_count(self, lexed_data):
+        """fit_transform wrapper"""
+        cv = CountVectorizer()
+        x = cv.fit_transform(lexed_data)
+        return cv, x
+
+    def count(self, lexed_data):
+        """Transform the output of lex() into a count vector"""
+        return self.count_vectorizer.transform(lexed_data)
+
+    def train_tfidf(self, counts):
+        """fit_transform wrapper"""
+        tf = TfidfTransformer()
+        x = tf.fit_transform(counts).toarray()
+        return tf, x
+
+    def tfidf(self, counts):
+        """Transform the output of count() into a tfidf-ed vector"""
+        return self.tfidf_transformer.transform(counts).toarray()
+
+    def predict_from_js(self, data, clf=None):
+        """Run the whole chain on data"""
+        return self.predict_from_lexed([self.lex(data)], clf=clf)
+
+    def predict_from_lexed(self, data_lexed_list, clf=None):
+        """Run the whole chain -bar the lexer- on data_lexed_list"""
+        if not clf:
+            clf = self.best_clf
+        return clf.predict(self.tfidf(self.count(data_lexed_list)))
+
+class Predictor():
+    """Load and use a classifier trained on a Database"""
+    def __init__(self, db):
+        """Load the training information"""
+        self.db = db
+        paths = sorted(glob.glob(db.path+'/*_training'))
+        self.path = paths[-1]
+        logging.debug("The chosen path is "+self.path)
+        self.ml = ML(db, self.path)
+        self.plotter = Plotter(self.ml)
+
+    def predict(self, snippet):
+        """Run the classifier on the given snippet"""
+        answer = self.ml.predict_from_js(snippet.data.decode('utf8'))
+        if answer:
+            logging.info("Snippet classified as malicious")
+        else:
+            logging.info("Snippet classified as legitimate")
+        self.plotter.plot(snippet)
+        return answer
+
+class Plotter():
+    """Draw plots that help us understand the results"""
+    def __init__(self, ml):
+        self.ml = ml
+        n_neighbors = 10
+        n_components = 2
+        self.learners = {'Isomap': manifold.Isomap(n_neighbors, n_components),
+                         'LLE': manifold.LocallyLinearEmbedding(n_neighbors, n_components, eigen_solver='auto'),
+                         'LTSA': manifold.LocallyLinearEmbedding(n_neighbors, n_components, eigen_solver='auto', method='ltsa'),
+                         'Hessian': manifold.LocallyLinearEmbedding(n_neighbors, n_components, eigen_solver='auto', method='hessian'),
+                         "Modified": manifold.LocallyLinearEmbedding(n_neighbors, n_components, eigen_solver='auto', method='hessian'),
+                         "MDS": manifold.MDS(n_components, max_iter=100, n_init=1),
+                         "Spectral Embedding": manifold.SpectralEmbedding(n_components=n_components,n_neighbors=n_neighbors),
+                         "t-SNE": manifold.TSNE(n_components=n_components, init='pca', random_state=0)}
+                
+
+    def plot(self, snippet):
+        """Plot the snippet among the results and the classifier output"""
+        plt.figure(figsize=(30,20))
+        learner = self.learners[open(self.ml.path+'/projection.txt', 'r').read().strip()]
+        Y2d = learner.fit_transform(self.ml.X_tfidf)
+        if hasattr(self.ml.best_clf, "decision_function"):
+            Z = self.ml.best_clf.decision_function(self.ml.X_tfidf)
+        else:
+            Z = self.ml.best_clf.predict_proba(self.ml.X_tfidf)[:, 1]
+        plt.scatter(Y2d[:, 0], Y2d[:, 1], c=Z, alpha=0.7)
+        x_min = self.ml.X_tfidf.min(0)
+        x_span = self.ml.X_tfidf.max(0)-self.ml.X_tfidf.min(0)
+        rand_points = []
+        for i in range(0,100):
+            r = np.random.random(len(x_min))*x_span - x_min
+            rand_points.append(r)
+        rand_points = np.array(rand_points)
+        if hasattr(self.ml.best_clf, "decision_function"):
+            rand_values = self.ml.best_clf.decision_function(rand_points)
+        else:
+            rand_values = self.ml.best_clf.predict_proba(rand_points)[:, 1]
+        Ybis2d = learner.transform(rand_points)
+        plt.figure(figsize=(15,10))
+        _Y = np.vstack([Y2d, Ybis2d])
+        _Z = np.vstack([Z[:,None], rand_values[:,None]])
+        xi = np.linspace(_Y[:,0].min(), _Y[:,0].max(), 500)
+        yi = np.linspace(_Y[:,1].min(), _Y[:,1].max(), 500)
+        zi = griddata(_Y, _Z, (xi[None,:], yi[:,None]), method='nearest')
+        CS = plt.contour(xi,yi,zi[:,:,0],15,linewidths=0.5,colors='k')
+        CS = plt.contourf(xi,yi,zi[:,:,0],15,cmap=plt.cm.jet)
+        plt.scatter(Y2d[:, 0], Y2d[:, 1], c=Z)
+        
+        x = self.ml.tfidf(self.ml.count([self.ml.lex(snippet.data.decode('utf8'))]))
+        Yter = learner.transform(x)
+        plt.scatter(Yter[:,0],Yter[:,1], c='green', marker='*', s=300)
+        plt.savefig(self.ml.path+'/'+snippet.sha1+'.png')
+
+        
+    def project_on_plane(self, X, color,  title='2D projection', unique=None, labels=None):
+        '''Give multiple 2D representations of a high-dimenstional dataset
+
+        See http://scikit-learn.org/stable/auto_examples/manifold/plot_compare_methods.html'''
+        fig = plt.figure(figsize=(15,8))
+        fig_num = 331
+        if unique:
+            s = unique
+            l = self.learners[unique]
+            single_projection(X, s, l, color, labels)
+        else:
+            for s, l in self.learners.items():
+                ax = fig.add_subplot(fig_num)
+                fig_num += 1
+                self.single_projection(X, s, l, color, labels)
+        plt.savefig(self.ml.path+'/'+title+'.pdf')
+
+    def single_projection(self, X, s, l, color, labels=None):
         Y = l.fit_transform(X)
         plt.title(s)
         plt.scatter(Y[:, 0], Y[:, 1], c=color, alpha=0.7)
@@ -108,64 +284,40 @@ class Trainer():
         if labels:
             place_labels(labels, Y)
 
-    def project_on_plane(self, X, color, n_neighbors = 10, n_components = 2, title='2D projection', unique=None, labels=None):
-        '''Give multiple 2D representations of a high-dimenstional dataset
-
-    See http://scikit-learn.org/stable/auto_examples/manifold/plot_compare_methods.html'''
-        fig = plt.figure(figsize=(15,8))
-        learners = [['Isomap', manifold.Isomap(n_neighbors, n_components)],
-                    ['LLE', manifold.LocallyLinearEmbedding(n_neighbors, n_components, eigen_solver='auto')],
-                    ['LTSA', manifold.LocallyLinearEmbedding(n_neighbors, n_components, eigen_solver='auto', method='ltsa')],
-                    ['Hessian', manifold.LocallyLinearEmbedding(n_neighbors, n_components, eigen_solver='auto', method='hessian')],
-                    ["Modified", manifold.LocallyLinearEmbedding(n_neighbors, n_components, eigen_solver='auto', method='hessian')],
-                    ["MDS", manifold.MDS(n_components, max_iter=100, n_init=1)],
-                    ["Spectral Embedding", manifold.SpectralEmbedding(n_components=n_components,n_neighbors=n_neighbors)],
-                    ["t-SNE", manifold.TSNE(n_components=n_components, init='pca', random_state=0)]
-                ]
-        fig_num = 331
-        if unique:
-            s,l = [x for x in learners if x[0] == unique][0]
-            single_projection(X, s, l, color, labels)
-        else:
-            for s, l in learners:
-                ax = fig.add_subplot(fig_num)
-                fig_num += 1
-                self.single_projection(X, s, l, color, labels)
-        plt.savefig(self.path+'/'+title+'.pdf')
-
     def plot_results(self):
         """Plot the classifiers training information"""
         plt.figure(figsize=(10,10))
-        for clf_str, (fp, fn) in self.results.items():
+        for clf_str, (fp, fn) in self.ml.results.items():
             plt.scatter(fp, fn)
             plt.text(fp, fn, clf_str)
         plt.title("Performance of different classification methods over the current database")
         plt.xlabel("# of False Positives")
         plt.ylabel("# of False Negatives")
-        plt.savefig(self.path+'/FPFN.png')
-        self.project_on_plane(self.X, ['r' if c == 1 else 'g' for c in self.Y])
+        plt.savefig(self.ml.path+'/FPFN.png')
+        self.project_on_plane(self.ml.X_tfidf, ['r' if c == 1 else 'g' for c in self.ml.Y])
+
+
+class Trainer():
+    """Create and save the information about training a classifier on a Database"""
+    def __init__(self, db):
+        """Create the structure storing the training information"""
+        self.db = db
+        self.path = db.path+'/'+datetime.datetime.now().strftime('%Y%m%d%H%M%S')+'_training'
+        self.ml = ML(db, self.path)
+        os.makedirs(self.path)
+        self.plotter = Plotter(self.ml)
 
     def fit(self):
         """Train multiple classifiers, print and save performance information"""
-        self.tfidf = self.train_tfidf()
-        X_0 = self.tfidf([s.data for s in self.db.legitimate_snippets()])
-        X_1 = self.tfidf([s.data for s in self.db.malicious_snippets()])
-        self.X = np.vstack([X_0, X_1])
-        self.Y =np.zeros(len(self.X))
-        self.Y[-len(X_1):] = 1
-        self.write_pickle(self.X, 'X')
-        self.write_pickle(self.Y, 'Y')
-        self.results = {'Yes': [len(X_0), 0], 'No': [0, len(X_1)]}
-        for str_clf in ['LinearSVC', 'KNeighborsClassifier', 'SVC', 'BaggingClassifier', 'RandomForestClassifier',
-                        'ExtraTreesClassifier', 'AdaBoostClassifier', 'GradientBoostingClassifier']:
-            clf = eval(str_clf+'()')
+        self.ml.precompute_loo()
+        for str_clf in ['LinearSVC', 'KNeighborsClassifier', 'SVC',
+                        'BaggingClassifier', 'RandomForestClassifier',
+                        'ExtraTreesClassifier', 'AdaBoostClassifier',
+                        'GradientBoostingClassifier']:
             logging.info("Evaluating "+str_clf+"...")
-            cm = self.clf_eval(clf, self.X, self.Y)
-            self.results[str_clf] = [cm[0,1], cm[1,0]]
-            clf.fit(self.X,self.Y)
-            self.write_pickle(clf, str_clf)
-        self.write_pickle(self.results, "results")
-        self.plot_results()
+            self.ml.clf_eval(str_clf)
+        self.ml.write_all()
+        Plotter(self.ml).plot_results()
 
 
 class Database():
@@ -272,14 +424,11 @@ class Snippet():
         with open(log_fname, 'a') as f:
             f.write(log_message)
 
-
-def do_add():
-    """Add or move a snippet in the database"""
-    database = Database(arguments['<database>'])
-    status = 'malicious' if arguments['-m'] else 'legitimate' if arguments['-l'] else 'unknown'
+def data_from_arg(js_file_arg):
+    """Return the data corresponding to the given argument"""
     fname = arguments['<js-file>'] if arguments['<js-file>'] != '-' else '/dev/stdin'
-    #REgexp from https://gist.github.com/gruber/8891611
     url_regexp = re.compile(r"""(?i)\b((?:https?:(?:/{1,3}|[a-z0-9%])|[a-z0-9.\-]+[.](?:com|net|org|edu|gov|mil|aero|asia|biz|cat|coop|info|int|jobs|mobi|museum|name|post|pro|tel|travel|xxx|ac|ad|ae|af|ag|ai|al|am|an|ao|aq|ar|as|at|au|aw|ax|az|ba|bb|bd|be|bf|bg|bh|bi|bj|bm|bn|bo|br|bs|bt|bv|bw|by|bz|ca|cc|cd|cf|cg|ch|ci|ck|cl|cm|cn|co|cr|cs|cu|cv|cx|cy|cz|dd|de|dj|dk|dm|do|dz|ec|ee|eg|eh|er|es|et|eu|fi|fj|fk|fm|fo|fr|ga|gb|gd|ge|gf|gg|gh|gi|gl|gm|gn|gp|gq|gr|gs|gt|gu|gw|gy|hk|hm|hn|hr|ht|hu|id|ie|il|im|in|io|iq|ir|is|it|je|jm|jo|jp|ke|kg|kh|ki|km|kn|kp|kr|kw|ky|kz|la|lb|lc|li|lk|lr|ls|lt|lu|lv|ly|ma|mc|md|me|mg|mh|mk|ml|mm|mn|mo|mp|mq|mr|ms|mt|mu|mv|mw|mx|my|mz|na|nc|ne|nf|ng|ni|nl|no|np|nr|nu|nz|om|pa|pe|pf|pg|ph|pk|pl|pm|pn|pr|ps|pt|pw|py|qa|re|ro|rs|ru|rw|sa|sb|sc|sd|se|sg|sh|si|sj|Ja|sk|sl|sm|sn|so|sr|ss|st|su|sv|sx|sy|sz|tc|td|tf|tg|th|tj|tk|tl|tm|tn|to|tp|tr|tt|tv|tw|tz|ua|ug|uk|us|uy|uz|va|vc|ve|vg|vi|vn|vu|wf|ws|ye|yt|yu|za|zm|zw)/)(?:[^\s()<>{}\[\]]+|\([^\s()]*?\([^\s()]+\)[^\s()]*?\)|\([^\s]+?\))+(?:\([^\s()]*?\([^\s()]+\)[^\s()]*?\)|\([^\s]+?\)|[^\s`!()\[\]{};:'".,<>?«»“”‘’])|(?:(?<!@)[a-z0-9]+(?:[.\-][a-z0-9]+)*[.](?:com|net|org|edu|gov|mil|aero|asia|biz|cat|coop|info|int|jobs|mobi|museum|name|post|pro|tel|travel|xxx|ac|ad|ae|af|ag|ai|al|am|an|ao|aq|ar|as|at|au|aw|ax|az|ba|bb|bd|be|bf|bg|bh|bi|bj|bm|bn|bo|br|bs|bt|bv|bw|by|bz|ca|cc|cd|cf|cg|ch|ci|ck|cl|cm|cn|co|cr|cs|cu|cv|cx|cy|cz|dd|de|dj|dk|dm|do|dz|ec|ee|eg|eh|er|es|et|eu|fi|fj|fk|fm|fo|fr|ga|gb|gd|ge|gf|gg|gh|gi|gl|gm|gn|gp|gq|gr|gs|gt|gu|gw|gy|hk|hm|hn|hr|ht|hu|id|ie|il|im|in|io|iq|ir|is|it|je|jm|jo|jp|ke|kg|kh|ki|km|kn|kp|kr|kw|ky|kz|la|lb|lc|li|lk|lr|ls|lt|lu|lv|ly|ma|mc|md|me|mg|mh|mk|ml|mm|mn|mo|mp|mq|mr|ms|mt|mu|mv|mw|mx|my|mz|na|nc|ne|nf|ng|ni|nl|no|np|nr|nu|nz|om|pa|pe|pf|pg|ph|pk|pl|pm|pn|pr|ps|pt|pw|py|qa|re|ro|rs|ru|rw|sa|sb|sc|sd|se|sg|sh|si|sj|Ja|sk|sl|sm|sn|so|sr|ss|st|su|sv|sx|sy|sz|tc|td|tf|tg|th|tj|tk|tl|tm|tn|to|tp|tr|tt|tv|tw|tz|ua|ug|uk|us|uy|uz|va|vc|ve|vg|vi|vn|vu|wf|ws|ye|yt|yu|za|zm|zw)\b/?(?!@)))""")
+    #REgexp from https://gist.github.com/gruber/8891611
     if url_regexp.match(fname):
         # I wouldn't need to lie if people did not forbid robot to fetch files.
         headers = {'User-Agent': "Mozilla/5.0 (X11; U; Linux i686) Gecko/20071127 Firefox/2.0.0.11"}
@@ -288,6 +437,13 @@ def do_add():
         print("DEBUG: {} does not match".format(fname))
         with open(fname, 'rb') as f:
             data = f.read()
+    return data
+
+def do_add():
+    """Add or move a snippet in the database"""
+    database = Database(arguments['<database>'])
+    status = 'malicious' if arguments['-m'] else 'legitimate' if arguments['-l'] else 'unknown'
+    data = data_from_arg(arguments['<js-file>'])
     snippet = Snippet(data=data, status=status)
     existing = database.lookup(snippet.sha1)
     if not existing:
@@ -311,7 +467,23 @@ def do_fit():
     database = Database(arguments['<database>'])
     trainer = Trainer(database)
     trainer.fit()
-    
+
+def do_predict():
+    """Assess the maliciousness of a sample"""
+    database = Database(arguments['<database>'])
+    data = data_from_arg(arguments['<js-file>'])
+    snippet = Snippet(data=data, status='unknown')
+    existing = database.lookup(snippet.sha1)
+    predictor = Predictor(database)
+    if existing:
+        existing.log(event='seen', message='Submitted for prediction')
+    else:
+        database.add_new(snippet, message='Submitted for prediction')
+    if not existing or existing.status=='unknown':
+        predictor.predict(snippet)
+    else:
+        logging.info('Sumbitted sample is known as '+existing.status)
+        predictor.predict(existing)
 if __name__ == '__main__':
     arguments = docopt(__doc__, version='JsItBad 0.0')
     logging.basicConfig(level=logging.DEBUG)
@@ -319,3 +491,5 @@ if __name__ == '__main__':
         do_add()
     elif arguments['fit']:
         do_fit()
+    elif arguments['predict']:
+        do_predict()

@@ -1,0 +1,289 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="utf-8"/>
+<title>A killer feature set for automated static detection of malicious javascript code</title>
+<meta name="author" content="(Edouard Klein, Sébastien Larinier, Alexandra Toussaint, Paul Rascagnères)"/>
+<style type="text/css">
+.underline { text-decoration: underline; }
+</style>
+<link rel="stylesheet" href="http://cdn.jsdelivr.net/reveal.js/3.0.0/css/reveal.css"/>
+
+<link rel="stylesheet" href="http://cdn.jsdelivr.net/reveal.js/3.0.0/css/theme/moon.css" id="theme"/>
+
+
+<!-- If the query includes 'print-pdf', include the PDF print sheet -->
+<script>
+    if( window.location.search.match( /print-pdf/gi ) ) {
+        var link = document.createElement( 'link' );
+        link.rel = 'stylesheet';
+        link.type = 'text/css';
+        link.href = 'http://cdn.jsdelivr.net/reveal.js/3.0.0/css/print/pdf.css';
+        document.getElementsByTagName( 'head' )[0].appendChild( link );
+    }
+</script>
+<script type="text/javascript" src="https://cdn.mathjax.org/mathjax/latest/MathJax.js?config=TeX-AMS-MML_HTMLorMML"></script>
+</head>
+<body>
+<div class="reveal">
+<div class="slides">
+<section id="sec-title-slide"><h1 class="title">A killer feature set for automated static detection of malicious javascript code</h1><h2 class="author">Edouard Klein, Sébastien Larinier, Alexandra Toussaint, Paul Rascagnères</h2><p class="date">Created: 2017-01-13 ven. 17:13</p>
+</section>
+
+<section>
+<section id="slide-orgheadline5">
+<h2 id="orgheadline5"><span class="section-number-2">1</span> Automated Static Detection of Malicious JS Code</h2>
+<div class="outline-text-2" id="text-1">
+</div></section>
+<section id="slide-orgheadline1">
+<h3 id="orgheadline1"><span class="section-number-3">1.1</span> Automated Detection of Malicious Code</h3>
+<ul>
+<li>Put it in your proxy</li>
+<li>Put it in your interpreter/compiler</li>
+<li>Use it in post mortems</li>
+<li>(Run your malwares through it to stay under the radar)</li>
+
+</ul>
+</section>
+<section id="slide-orgheadline3">
+<h3 id="orgheadline3"><span class="section-number-3">1.2</span> Static</h3>
+<ul>
+<li>As opposed to <i>dynamic</i> or <i>behavioral</i>: you don't want to execute malicious code, do you ?</li>
+<li>It is litterally undecidable, because it is the halting problem in disguise.</li>
+<li>We did it anyway</li>
+
+</ul>
+</section>
+<section id="slide-orgheadline2">
+<h4 id="orgheadline2"><span class="section-number-4">1.2.1</span> (The halting problem)</h4>
+<ul>
+<li><code>is_malicious(js_code)</code> is a magical function that detects if a JS snippet is malicious</li>
+<li>Feed it the following code</li>
+
+</ul>
+<div class="org-src-container">
+
+<pre  class="src src-js"><span style="color: #4f97d7; font-weight: bold;">function</span> <span style="color: #bc6ec5; font-weight: bold;">lol</span><span style="color: #4f97d7;">(</span><span style="color: #7590db;">js_code</span><span style="color: #4f97d7;">){</span>
+    <span style="color: #4f97d7; font-weight: bold;">if</span> is_malicious<span style="color: #bc6ec5;">(</span>js_code<span style="color: #bc6ec5;">){</span>
+        <span style="color: #2aa1ae; background-color: #292e34;">//</span><span style="color: #2aa1ae; background-color: #292e34;">Don't be malicious</span>
+    <span style="color: #bc6ec5;">}</span> <span style="color: #4f97d7; font-weight: bold;">else</span> <span style="color: #bc6ec5;">{</span>
+        <span style="color: #2aa1ae; background-color: #292e34;">//</span><span style="color: #2aa1ae; background-color: #292e34;">Be malicious</span>
+    <span style="color: #bc6ec5;">}</span>
+<span style="color: #4f97d7;">}</span>
+</pre>
+</div>
+
+
+<div class="figure">
+<p><img src="./head.gif" alt="head.gif" class="fragment appear" />
+</p>
+</div>
+
+</section>
+<section id="slide-orgheadline4">
+<h3 id="orgheadline4"><span class="section-number-3">1.3</span> JS</h3>
+<ul>
+<li>Ubiquitous</li>
+<li>Ugly</li>
+<li>Known attack vector</li>
+<li>Interpreted: the source is provided</li>
+
+</ul>
+
+</section>
+</section>
+<section>
+<section id="slide-orgheadline8">
+<h2 id="orgheadline8"><span class="section-number-2">2</span> Feature Engineering</h2>
+<div class="outline-text-2" id="text-2">
+</div></section>
+<section id="slide-orgheadline6">
+<h3 id="orgheadline6"><span class="section-number-3">2.1</span> Goal</h3>
+<p>
+Transform this:
+</p>
+<div class="org-src-container">
+
+<pre  class="src src-js">!<span style="color: #4f97d7; font-weight: bold;">function</span> $<span style="color: #4f97d7;">(){</span>console.log<span style="color: #bc6ec5;">(</span><span style="color: #2d9574;">'!'</span>+$+<span style="color: #2d9574;">'()'</span><span style="color: #bc6ec5;">)</span><span style="color: #4f97d7;">}()</span> <span style="color: #2aa1ae; background-color: #292e34;">//</span><span style="color: #2aa1ae; background-color: #292e34;">Credit @cowboy</span>
+</pre>
+</div>
+<p>
+into this:
+</p>
+<div class="org-src-container">
+
+<pre  class="src src-python">array<span style="color: #4f97d7;">(</span><span style="color: #bc6ec5;">[</span> <span style="color: #a45bad;">0</span>.<span style="color: #a45bad;">40662066</span>,  <span style="color: #a45bad;">0</span>.<span style="color: #a45bad;">08107816</span>,  <span style="color: #a45bad;">0</span>.<span style="color: #a45bad;">71288435</span>, ..., <span style="color: #a45bad;">0</span>.<span style="color: #a45bad;">96536863</span><span style="color: #bc6ec5;">]</span><span style="color: #4f97d7;">)</span>
+</pre>
+</div>
+<p>
+then do some Machine Learning Magic
+</p>
+</section>
+<section id="slide-orgheadline7">
+<h3 id="orgheadline7"><span class="section-number-3">2.2</span> Pitfalls</h3>
+<ul>
+<li>(Very) Good features make the problem trivially decidable in practice</li>
+<li>Bad features:
+<ul>
+<li>Prevent validation (colinear features)</li>
+<li>Consume CPU cycles</li>
+<li>Hide information</li>
+
+</ul></li>
+
+</ul>
+</section>
+</section>
+<section>
+<section id="slide-orgheadline15">
+<h2 id="orgheadline15"><span class="section-number-2">3</span> Our killer feature</h2>
+<div class="outline-text-2" id="text-3">
+</div></section>
+<section id="slide-orgheadline9">
+<h3 id="orgheadline9"><span class="section-number-3">3.1</span> The feature</h3>
+<div class="org-src-container">
+
+<pre  class="src src-js">!<span style="color: #4f97d7; font-weight: bold;">function</span> $<span style="color: #4f97d7;">(){</span>console.log<span style="color: #bc6ec5;">(</span><span style="color: #2d9574;">'!'</span>+$+<span style="color: #2d9574;">'()'</span><span style="color: #bc6ec5;">)</span><span style="color: #4f97d7;">}()</span> <span style="color: #2aa1ae; background-color: #292e34;">//</span><span style="color: #2aa1ae; background-color: #292e34;">Credit @cowboy</span>
+</pre>
+</div>
+<p>
+Lex it:
+</p>
+<div class="org-src-container">
+
+<pre  class="src src-python">NOT FUNCTION ID LPAREN RPAREN LBRACE ID PERIOD ID LPAREN STRING PLUS
+ID PLUS STRING RPAREN RBRACE LPAREN RPAREN
+</pre>
+</div>
+<p>
+Use TFIDF:
+\[\frac{\textrm{Term Frequency}}{\textrm{Inverse Document Frequency}}\]
+</p>
+<div class="org-src-container">
+
+<pre  class="src src-python">array<span style="color: #4f97d7;">(</span><span style="color: #bc6ec5;">[</span> <span style="color: #a45bad;">0</span>.<span style="color: #a45bad;">40662066</span>,  <span style="color: #a45bad;">0</span>.<span style="color: #a45bad;">08107816</span>,  <span style="color: #a45bad;">0</span>.<span style="color: #a45bad;">71288435</span>, ..., <span style="color: #a45bad;">0</span>.<span style="color: #a45bad;">96536863</span><span style="color: #bc6ec5;">]</span><span style="color: #4f97d7;">)</span>
+</pre>
+</div>
+</section>
+<section id="slide-orgheadline14">
+<h3 id="orgheadline14"><span class="section-number-3">3.2</span> Results</h3>
+<div class="outline-text-3" id="text-3-2">
+</div></section>
+<section id="slide-orgheadline10">
+<h4 id="orgheadline10"><span class="section-number-4">3.2.1</span> We tried:</h4>
+<ul>
+<li>LinearSVC</li>
+<li>KNeighborsClassifier</li>
+<li>SVC</li>
+<li>BaggingClassifier</li>
+<li>RandomForestClassifier</li>
+<li>ExtraTreesClassifier</li>
+<li>AdaBoostClassifier</li>
+<li>GradientBoostingClassifier</li>
+
+</ul>
+
+
+</section>
+<section id="slide-orgheadline11">
+<h4 id="orgheadline11"><span class="section-number-4">3.2.2</span> Performance</h4>
+
+<div class="figure">
+<p><img src="FPFN_small.png" alt="FPFN_small.png" />
+</p>
+</div>
+
+<p>
+Linear classifier, Random Forest and Gradient Boosting all make 0 errors on a leave-one-out.
+</p>
+</section>
+<section id="slide-orgheadline12">
+<h4 id="orgheadline12"><span class="section-number-4">3.2.3</span> ClojureScript Compiler</h4>
+
+<div class="figure">
+<p><img src="cljs_small.png" alt="cljs_small.png" />
+</p>
+</div>
+</section>
+<section id="slide-orgheadline13">
+<h4 id="orgheadline13"><span class="section-number-4">3.2.4</span> Quine</h4>
+
+<div class="figure">
+<p><img src="quine_small.png" alt="quine_small.png" />
+</p>
+</div>
+
+</section>
+</section>
+<section>
+<section id="slide-orgheadline16">
+<h2 id="orgheadline16"><span class="section-number-2">4</span> Related Work</h2>
+<ul>
+<li><a href="https://scholar.google.fr/scholar?q=feature+engineering">https://scholar.google.fr/scholar?q=feature+engineering</a></li>
+<li>Peter Likarish, Eunjin Jung, and Insoon Jo. Obfuscated malicious javascript detection using clas- sification techniques. In 4th International Conference on Malicious and Unwanted Software (MALWARE), 2009, pages 47–54. IEEE.</li>
+
+</ul>
+
+
+<p>
+Things that are easier to compute, but don't work as well:
+</p>
+<ul>
+<li>length, #lines, avg #char/line, #strings</li>
+<li># non printable, #hex or octal, max nesting level</li>
+
+</ul>
+</section>
+</section>
+<section>
+<section id="slide-orgheadline17">
+<h2 id="orgheadline17"><span class="section-number-2">5</span> Conclusion and future work</h2>
+<ul>
+<li><a href="https://github.com/edouardklein/jsitbad">https://github.com/edouardklein/jsitbad</a> (AGPLv3)</li>
+<li>Try it on other interpreted languages (VB, Python, etc.)</li>
+<li>Try it on decompiler output</li>
+<li>Feature Selection, comparison with the simple features</li>
+<li>Lexer tweaking for better detection (when we'll see a sample we can't detect)</li>
+
+</ul>
+</section>
+</section>
+</div>
+</div>
+<script src="http://cdn.jsdelivr.net/reveal.js/3.0.0/lib/js/head.min.js"></script>
+<script src="http://cdn.jsdelivr.net/reveal.js/3.0.0/js/reveal.js"></script>
+
+<script>
+// Full list of configuration options available here:
+// https://github.com/hakimel/reveal.js#configuration
+Reveal.initialize({
+
+controls: true,
+progress: true,
+history: false,
+center: true,
+slideNumber: 'c',
+rollingLinks: false,
+keyboard: true,
+overview: true,
+
+theme: Reveal.getQueryHash().theme, // available themes are in /css/theme
+transition: Reveal.getQueryHash().transition || 'default', // default/cube/page/concave/zoom/linear/fade/none
+transitionSpeed: 'default',
+multiplex: {
+    secret: '', // null if client
+    id: '', // id, obtained from socket.io server
+    url: '' // Location of socket.io server
+},
+
+// Optional libraries used to extend on reveal.js
+dependencies: [
+ { src: 'http://cdn.jsdelivr.net/reveal.js/3.0.0/lib/js/classList.js', condition: function() { return !document.body.classList; } },
+ { src: 'http://cdn.jsdelivr.net/reveal.js/3.0.0/plugin/markdown/marked.js', condition: function() { return !!document.querySelector( '[data-markdown]' ); } },
+ { src: 'http://cdn.jsdelivr.net/reveal.js/3.0.0/plugin/markdown/markdown.js', condition: function() { return !!document.querySelector( '[data-markdown]' ); } },
+ { src: 'http://cdn.jsdelivr.net/reveal.js/3.0.0/plugin/zoom-js/zoom.js', async: true, condition: function() { return !!document.body.classList; } },
+ { src: 'http://cdn.jsdelivr.net/reveal.js/3.0.0/plugin/notes/notes.js', async: true, condition: function() { return !!document.body.classList; } }]
+});
+</script>
+</body>
+</html>

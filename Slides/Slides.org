@@ -1,0 +1,103 @@
+#+TITLE: A killer feature set for automated static detection of malicious javascript code
+#+AUTHOR: Edouard Klein, Sébastien Larinier, Alexandra Toussaint, Paul Rascagnères
+#+OPTIONS: toc:nil
+
+* Automated Static Detection of Malicious JS Code
+** Automated Detection of Malicious Code
+  - Put it in your proxy
+  - Put it in your interpreter/compiler
+  - Use it in post mortems
+  - (Run your malwares through it to stay under the radar)
+** Static
+   - As opposed to /dynamic/ or /behavioral/: you don't want to execute malicious code, do you ?
+   - It is litterally undecidable, because it is the halting problem in disguise.
+   - We did it anyway
+*** (The halting problem)
+     - =is_malicious(js_code)= is a magical function that detects if a JS snippet is malicious
+     - Feed it the following code
+#+begin_src js
+  function lol(js_code){
+      if is_malicious(js_code){
+          //Don't be malicious
+      } else {
+          //Be malicious
+      }
+  }
+#+end_src
+    
+#+ATTR_REVEAL: :frag appear
+[[file:./head.gif]]
+
+** JS
+   - Ubiquitous
+   - Ugly
+   - Known attack vector
+   - Interpreted: the source is provided
+
+* Feature Engineering
+** Goal
+  Transform this:
+#+begin_src js
+!function $(){console.log('!'+$+'()')}() //Credit @cowboy
+#+end_src
+into this:
+#+begin_src python
+  array([ 0.40662066,  0.08107816,  0.71288435, ..., 0.96536863])
+#+end_src
+then do some Machine Learning Magic
+** Pitfalls
+   - (Very) Good features make the problem trivially decidable in practice
+   - Bad features:
+     - Prevent validation (colinear features)
+     - Consume CPU cycles
+     - Hide information
+* Our killer feature
+** The feature
+#+begin_src js
+!function $(){console.log('!'+$+'()')}() //Credit @cowboy
+#+end_src
+Lex it:
+#+begin_src python
+NOT FUNCTION ID LPAREN RPAREN LBRACE ID PERIOD ID LPAREN STRING PLUS
+ID PLUS STRING RPAREN RBRACE LPAREN RPAREN
+#+end_src
+Use TFIDF:
+$$\frac{\textrm{Term Frequency}}{\textrm{Inverse Document Frequency}}$$
+#+begin_src python
+  array([ 0.40662066,  0.08107816,  0.71288435, ..., 0.96536863])
+#+end_src
+** Results
+*** We tried:
+   - LinearSVC
+   - KNeighborsClassifier
+   - SVC
+   - BaggingClassifier
+   - RandomForestClassifier
+   - ExtraTreesClassifier
+   - AdaBoostClassifier
+   - GradientBoostingClassifier
+     
+
+*** Performance
+    [[file:FPFN_small.png]]
+
+   Linear classifier, Random Forest and Gradient Boosting all make 0 errors on a leave-one-out.
+*** ClojureScript Compiler
+[[file:cljs_small.png]]
+*** Quine
+    [[file:quine_small.png]]
+     
+* Related Work
+  - https://scholar.google.fr/scholar?q=feature+engineering
+  - Peter Likarish, Eunjin Jung, and Insoon Jo. Obfuscated malicious javascript detection using clas- sification techniques. In 4th International Conference on Malicious and Unwanted Software (MALWARE), 2009, pages 47–54. IEEE.
+
+ 
+  Things that are easier to compute, but don't work as well:
+  - length, #lines, avg #char/line, #strings
+  - # non printable, #hex or octal, max nesting level
+* Conclusion and future work
+  - https://github.com/edouardklein/jsitbad (AGPLv3)
+  - Try it on other interpreted languages (VB, Python, etc.)
+  - Try it on decompiler output
+  - Feature Selection, comparison with the simple features
+  - Lexer tweaking for better detection (when we'll see a sample we can't detect)

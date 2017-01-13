@@ -1,4 +1,4 @@
-#!/usr/bin/env python
+#!/usr/bin/env python3
 # -*- coding: utf-8 -*-
 """
 jsitbad: try to classify .js files as malicious or legitimate
@@ -70,8 +70,18 @@ class ML(Picklable):
             self.results = self.read_pickle('results')
             self.clf = self.read_pickle('clf')
             manhattan = lambda clf_str: sum(self.results[clf_str])
-            logging.debug({k:manhattan(k) for k in self.results})
+            logging.debug({k: manhattan(k) for k in self.results})
             best_clf = sorted(self.results, key=manhattan)[0]
+            best_score = manhattan(best_clf)
+            logging.debug(list(enumerate(self.results.keys())))
+            choices = [c for c in self.results
+                       if manhattan(c) == best_score]
+            logging.debug(choices)
+            if len(choices) > 1:
+                [print("{}: {}".format(i, c))
+                 for i, c in enumerate(choices)]
+                i = int(input("Which classifier shall we use ?"))
+            best_clf = choices[i]
             logging.debug("Chosen clf : "+best_clf)
             self.best_clf = self.clf[best_clf]
             self.X_tfidf = self.read_pickle('X_tfidf')
@@ -223,7 +233,7 @@ class Plotter():
 
     def plot(self, snippet):
         """Plot the snippet among the results and the classifier output"""
-        plt.figure(figsize=(30,20))
+        plt.figure(figsize=(60,40))
         learner = self.learners[open(self.ml.path+'/projection.txt', 'r').read().strip()]
         Y2d = learner.fit_transform(self.ml.X_tfidf)
         if hasattr(self.ml.best_clf, "decision_function"):
@@ -256,7 +266,7 @@ class Plotter():
         x = self.ml.tfidf(self.ml.count([self.ml.lex(snippet.data.decode('utf8'))]))
         Yter = learner.transform(x)
         plt.scatter(Yter[:,0],Yter[:,1], c='green', marker='*', s=300)
-        plt.savefig(self.ml.path+'/'+snippet.sha1+'.png')
+        plt.savefig(self.ml.path+'/'+snippet.sha1+'.pdf')
 
         
     def project_on_plane(self, X, color,  title='2D projection', unique=None, labels=None):
